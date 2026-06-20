@@ -37,11 +37,11 @@
       <section class="toolbar query-toolbar address-toolbar">
         <label class="field">
           <span>发货地</span>
-          <select id="originSelect"></select>
+          <select id="originSelect" required></select>
         </label>
         <label class="field wide">
           <span>顾客地址</span>
-          <input id="addressInput" type="text" placeholder="输入省市区和详细地址">
+          <input id="addressInput" type="text" placeholder="输入省份和市，可不填区县街道" required>
         </label>
       </section>
 
@@ -121,6 +121,6 @@
 
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="shared-library.js?v=20260623"></script>
-  <script src="app.js?v=20260629"></script>
+  <script src="app.js?v=20260630"></script>
 </body>
 </html>

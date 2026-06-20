@@ -11,7 +11,7 @@ const slots = [
     expectedName: "发货地址.xlsx",
     description: "发货地、报价区域、仓库地址、省市区、联系人等发货信息。",
     template: "origin",
-    keywords: ["发货地", "报价区域", "发货省", "发货市", "详细地址"]
+    keywords: ["供应商简称", "发货地", "报价区域", "发货省", "发货市", "详细地址"]
   },
   {
     id: "dim-product-info",
@@ -717,6 +717,7 @@ function downloadSlotTemplate(type) {
       sheetName: "发货地址",
       rows: [
         {
+          供应商简称: "河北供应商",
           发货地: "河北仓",
           报价区域: "河北",
           发货省: "河北省",
@@ -728,6 +729,7 @@ function downloadSlotTemplate(type) {
           备注: ""
         },
         {
+          供应商简称: "宁波供应商",
           发货地: "宁波仓",
           报价区域: "宁波",
           发货省: "浙江省",

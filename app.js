@@ -161,10 +161,11 @@ function readWorkbook(fileName, buffer) {
 
 function normalizeOrigins(rows) {
   return rows.map((row) => {
-    const name = pick(row, ["发货地", "发货仓", "仓库", "地址名称", "名称"]);
+    const name = pick(row, ["供应商简称"]);
     if (!name) return null;
     const origin = {
       name: clean(name),
+      supplierShortName: clean(name),
       quoteZone: clean(pick(row, ["报价区域", "报价地区", "区域"])),
       province: clean(pick(row, ["发货省", "省", "省份"])),
       city: clean(pick(row, ["发货市", "市", "城市"])),
@@ -176,7 +177,9 @@ function normalizeOrigins(rows) {
     };
     origin.quoteZone = normalizeQuoteZone(origin.quoteZone || origin.name || origin.address || origin.city);
     return origin;
-  }).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
+  }).filter(Boolean)
+    .filter((origin, index, list) => list.findIndex((item) => sameText(item.name, origin.name)) === index)
+    .sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
 }
 
 function normalizeProducts(packageRows, infoRows = []) {
@@ -316,7 +319,7 @@ function renderOriginOptions() {
     els.originSelect.innerHTML = `<option value="">请先维护发货地址</option>`;
     return;
   }
-  els.originSelect.innerHTML = state.origins
+  els.originSelect.innerHTML = `<option value="">请选择发货地</option>` + state.origins
     .map((origin) => `<option value="${escapeHtml(origin.name)}">${escapeHtml(origin.name)}</option>`)
     .join("");
 }
@@ -351,7 +354,7 @@ async function importBatchFile(file) {
     const sheetName = workbook.SheetNames[0];
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "", raw: false });
     state.results = rows.map((row) => calculateBestOption({
-      origin: pick(row, ["发货地", "发货仓", "仓库"]) || els.originSelect.value,
+      origin: pick(row, ["发货地", "供应商简称", "发货仓", "仓库"]) || els.originSelect.value,
       address: pick(row, ["顾客地址", "客户地址", "收货地址", "地址"]) || "",
       model: pick(row, ["型号", "商品型号", "SKU", "sku"]) || "",
       materialCode: pick(row, ["物料编码", "物料代码", "商品编码", "产品编码", "存货编码"]) || "",
@@ -377,9 +380,16 @@ function calculateBestOption(input) {
   const match = findProductMatch({ model, materialCode, salesSeries });
   const product = match.product;
   const quoteZone = origin?.quoteZone || normalizeQuoteZone(originName);
+  const addressCheck = validateCustomerAddress(address);
 
-  if (!originName || !address) {
-    return buildResult(input, origin, product, null, [], "缺少发货地或顾客地址。");
+  if (!originName) {
+    return buildResult(input, origin, product, null, [], "发货地为必选项。");
+  }
+  if (!address) {
+    return buildResult(input, origin, product, null, [], "顾客地址为必填项。");
+  }
+  if (!addressCheck.valid) {
+    return buildResult(input, origin, product, null, [], addressCheck.message);
   }
   if (!materialCode) {
     return buildResult(input, origin, product, null, [], "物料编码为必填项。");
@@ -423,6 +433,87 @@ function calculateBestOption(input) {
 
 function findOrigin(originName) {
   return state.origins.find((item) => sameText(item.name, originName)) || null;
+}
+
+function validateCustomerAddress(address) {
+  const parts = parseCustomerAddress(address);
+  const missing = [];
+  if (!parts.province) missing.push("省份");
+  if (!parts.city) missing.push("市");
+  if (missing.length) {
+    return {
+      valid: false,
+      parts,
+      message: `顾客地址必须包含${missing.join("和")}。`
+    };
+  }
+  return { valid: true, parts, message: "" };
+}
+
+function parseCustomerAddress(address) {
+  const text = clean(address);
+  if (!text) return { province: "", city: "" };
+  const compact = text.replace(/\s+/g, "");
+  const province = findProvinceName(compact);
+  const afterProvince = province ? compact.slice(compact.indexOf(province.matchText) + province.matchText.length) : compact;
+  const city = findCityName(afterProvince, province);
+  return {
+    province: province?.name || "",
+    city: city || ""
+  };
+}
+
+function findProvinceName(text) {
+  const provinces = [
+    ["北京市", "北京"],
+    ["天津市", "天津"],
+    ["上海市", "上海"],
+    ["重庆市", "重庆"],
+    ["河北省", "河北"],
+    ["山西省", "山西"],
+    ["辽宁省", "辽宁"],
+    ["吉林省", "吉林"],
+    ["黑龙江省", "黑龙江"],
+    ["江苏省", "江苏"],
+    ["浙江省", "浙江"],
+    ["安徽省", "安徽"],
+    ["福建省", "福建"],
+    ["江西省", "江西"],
+    ["山东省", "山东"],
+    ["河南省", "河南"],
+    ["湖北省", "湖北"],
+    ["湖南省", "湖南"],
+    ["广东省", "广东"],
+    ["海南省", "海南"],
+    ["四川省", "四川"],
+    ["贵州省", "贵州"],
+    ["云南省", "云南"],
+    ["陕西省", "陕西"],
+    ["甘肃省", "甘肃"],
+    ["青海省", "青海"],
+    ["台湾省", "台湾"],
+    ["内蒙古自治区", "内蒙古"],
+    ["广西壮族自治区", "广西"],
+    ["西藏自治区", "西藏"],
+    ["宁夏回族自治区", "宁夏"],
+    ["新疆维吾尔自治区", "新疆"],
+    ["香港特别行政区", "香港"],
+    ["澳门特别行政区", "澳门"]
+  ];
+  for (const [name, shortName] of provinces) {
+    const candidates = [name, shortName];
+    const matchText = candidates.find((candidate) => text.includes(candidate));
+    if (matchText) return { name, shortName, matchText };
+  }
+  return null;
+}
+
+function findCityName(text, province) {
+  if (province && ["北京", "天津", "上海", "重庆"].includes(province.shortName)) {
+    return province.name;
+  }
+  const cityMatch = text.match(/([\u4e00-\u9fa5]{2,12}?(?:市|自治州|地区|盟))/);
+  return cityMatch ? cityMatch[1] : "";
 }
 
 function findProductMatch({ model, materialCode, salesSeries }) {
@@ -537,14 +628,17 @@ function renderResults() {
     </tr>
   `).join("");
   const matched = state.results.filter((row) => row.carrier).length;
-  els.resultHint.textContent = `共 ${state.results.length} 条，已匹配 ${matched} 条。`;
+  const firstFailure = state.results.find((row) => !row.carrier && row.message);
+  els.resultHint.textContent = firstFailure
+    ? `共 ${state.results.length} 条，已匹配 ${matched} 条。未匹配原因：${firstFailure.message}`
+    : `共 ${state.results.length} 条，已匹配 ${matched} 条。`;
   els.exportResults.disabled = false;
 }
 
 function downloadBatchTemplate() {
   const rows = [
-    { 发货地: "河北仓", 顾客地址: "浙江省杭州市余杭区示例路1号", 物料编码: "MAT-A100", 销售系列: "示例系列", 型号: "A100", 购买件数: 1 },
-    { 发货地: "宁波仓", 顾客地址: "江苏省南京市建邺区示例路2号", 物料编码: "MAT-B200", 销售系列: "示例系列", 型号: "B200", 购买件数: 2 }
+    { 发货地: "河北供应商", 顾客地址: "浙江省杭州市余杭区示例路1号", 物料编码: "MAT-A100", 销售系列: "示例系列", 型号: "A100", 购买件数: 1 },
+    { 发货地: "宁波供应商", 顾客地址: "江苏省南京市建邺区示例路2号", 物料编码: "MAT-B200", 销售系列: "示例系列", 型号: "B200", 购买件数: 2 }
   ];
   const worksheet = XLSX.utils.json_to_sheet(rows, { header: ["发货地", "顾客地址", "物料编码", "销售系列", "型号", "购买件数"] });
   const workbook = XLSX.utils.book_new();
