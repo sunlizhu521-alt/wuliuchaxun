@@ -863,7 +863,7 @@ function exportResults() {
     销售产品线: row.salesProductLine,
     销售系列: row.salesSeries,
     销售型号: row.model,
-    物料编码: row.materialCode,
+    "物料编码（主）": row.materialCode,
     商品名称: row.productName,
     购买数量: row.purchaseQty,
     单件包裹数: row.packageCount,
