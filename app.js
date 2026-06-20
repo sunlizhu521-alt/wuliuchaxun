@@ -26,6 +26,9 @@ const state = {
 
 const els = {
   originSelect: document.getElementById("originSelect"),
+  provinceSelect: document.getElementById("provinceSelect"),
+  citySelect: document.getElementById("citySelect"),
+  districtSelect: document.getElementById("districtSelect"),
   addressInput: document.getElementById("addressInput"),
   modelInput: document.getElementById("modelInput"),
   materialCodeInput: document.getElementById("materialCodeInput"),
@@ -45,12 +48,18 @@ init();
 
 async function init() {
   bindEvents();
+  renderProvinceOptions();
   await loadLibrary();
 }
 
 function bindEvents() {
   els.reloadLibrary.addEventListener("click", loadLibrary);
   els.runQuery.addEventListener("click", runSingleQuery);
+  els.provinceSelect.addEventListener("change", () => {
+    renderCityOptions();
+    renderDistrictOptions();
+  });
+  els.citySelect.addEventListener("change", renderDistrictOptions);
   els.materialCodeInput.addEventListener("input", updateProductInfoFields);
   els.materialCodeInput.addEventListener("change", updateProductInfoFields);
   els.exportResults.addEventListener("click", exportResults);
@@ -337,6 +346,77 @@ function renderOriginOptions() {
     .join("");
 }
 
+function getChinaRegions() {
+  return Array.isArray(window.CHINA_REGIONS) ? window.CHINA_REGIONS : [];
+}
+
+function renderProvinceOptions() {
+  const regions = getChinaRegions();
+  els.provinceSelect.innerHTML = `<option value="">请选择省</option>` + regions
+    .map((province) => `<option value="${escapeHtml(province.code)}">${escapeHtml(province.name)}</option>`)
+    .join("");
+  renderCityOptions();
+  renderDistrictOptions();
+}
+
+function getSelectedProvince() {
+  return getChinaRegions().find((province) => province.code === els.provinceSelect.value) || null;
+}
+
+function getCityOptions(province) {
+  if (!province) return [];
+  const cities = province.children || [];
+  if (["北京市", "天津市", "上海市", "重庆市"].includes(province.name) && cities.length === 1) {
+    return [{
+      code: cities[0].code,
+      name: province.name,
+      children: cities[0].children || []
+    }];
+  }
+  return cities;
+}
+
+function getSelectedCity() {
+  const province = getSelectedProvince();
+  return getCityOptions(province).find((city) => city.code === els.citySelect.value) || null;
+}
+
+function renderCityOptions() {
+  const cities = getCityOptions(getSelectedProvince());
+  els.citySelect.innerHTML = `<option value="">请选择市</option>` + cities
+    .map((city) => `<option value="${escapeHtml(city.code)}">${escapeHtml(city.name)}</option>`)
+    .join("");
+}
+
+function renderDistrictOptions() {
+  const city = getSelectedCity();
+  const districts = city?.children || [];
+  els.districtSelect.innerHTML = `<option value="">县/区域可不选</option>` + districts
+    .map((district) => `<option value="${escapeHtml(district.code)}">${escapeHtml(district.name)}</option>`)
+    .join("");
+}
+
+function getSelectedDistrict() {
+  const city = getSelectedCity();
+  return (city?.children || []).find((district) => district.code === els.districtSelect.value) || null;
+}
+
+function buildManualCustomerAddress() {
+  const province = getSelectedProvince();
+  const city = getSelectedCity();
+  const district = getSelectedDistrict();
+  const detail = clean(els.addressInput.value);
+
+  if (!province) return { address: "", error: "省为必选项。" };
+  if (!city) return { address: province.name, error: "市为必选项。" };
+
+  const parts = [province.name];
+  if (city.name && !sameText(city.name, province.name)) parts.push(city.name);
+  if (district?.name) parts.push(district.name);
+  if (detail) parts.push(detail);
+  return { address: parts.join(""), error: "" };
+}
+
 function updateProductInfoFields() {
   const info = findProductInfoByMaterialCode(els.materialCodeInput.value);
   els.salesSeriesInput.value = info?.salesSeries || "";
@@ -346,9 +426,11 @@ function updateProductInfoFields() {
 
 function runSingleQuery() {
   const productInfo = updateProductInfoFields();
+  const addressData = buildManualCustomerAddress();
   const result = calculateBestOption({
     origin: els.originSelect.value,
-    address: els.addressInput.value.trim(),
+    address: addressData.address,
+    addressError: addressData.error,
     model: productInfo?.model || els.modelInput.value.trim(),
     materialCode: els.materialCodeInput.value.trim(),
     salesSeries: productInfo?.salesSeries || els.salesSeriesInput.value.trim(),
@@ -393,6 +475,9 @@ function calculateBestOption(input) {
 
   if (!originName) {
     return buildResult(input, origin, product, null, [], "发货地为必选项。");
+  }
+  if (input.addressError) {
+    return buildResult(input, origin, product, null, [], input.addressError);
   }
   if (!address) {
     return buildResult(input, origin, product, null, [], "顾客地址为必填项。");
@@ -518,10 +603,10 @@ function findProvinceName(text) {
 }
 
 function findCityName(text, province) {
-  if (province && ["北京", "天津", "上海", "重庆"].includes(province.shortName)) {
+  if (province && ["北京", "天津", "上海", "重庆", "香港", "澳门"].includes(province.shortName)) {
     return province.name;
   }
-  const cityMatch = text.match(/([\u4e00-\u9fa5]{2,12}?(?:市|自治州|地区|盟))/);
+  const cityMatch = text.match(/([\u4e00-\u9fa5]{2,12}?(?:市|自治州|地区|盟|县))/);
   return cityMatch ? cityMatch[1] : "";
 }
 

@@ -174,7 +174,16 @@ select {
 }
 
 .address-toolbar {
-  grid-template-columns: 190px minmax(320px, 1fr);
+  grid-template-columns:
+    minmax(150px, 190px)
+    minmax(130px, 160px)
+    minmax(130px, 160px)
+    minmax(150px, 180px)
+    minmax(260px, 1fr);
+}
+
+.address-detail {
+  min-width: 260px;
 }
 
 .material-toolbar {
@@ -564,6 +573,10 @@ th {
   .library-grid,
   .library-card.file-slot {
     grid-template-columns: 1fr;
+  }
+
+  .address-detail {
+    min-width: 0;
   }
 }
 

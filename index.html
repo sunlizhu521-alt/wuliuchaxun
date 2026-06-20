@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>物流查询系统</title>
-  <link rel="stylesheet" href="styles.css?v=20260627">
+  <link rel="stylesheet" href="styles.css?v=20260632">
 </head>
 <body>
   <div class="app-shell">
@@ -39,9 +39,21 @@
           <span>发货地</span>
           <select id="originSelect" required></select>
         </label>
-        <label class="field wide">
-          <span>顾客地址</span>
-          <input id="addressInput" type="text" placeholder="输入省份和市，可不填区县街道" required>
+        <label class="field">
+          <span>省</span>
+          <select id="provinceSelect" required></select>
+        </label>
+        <label class="field">
+          <span>市</span>
+          <select id="citySelect" required></select>
+        </label>
+        <label class="field">
+          <span>县/区域</span>
+          <select id="districtSelect"></select>
+        </label>
+        <label class="field address-detail">
+          <span>详细地址</span>
+          <input id="addressInput" type="text" placeholder="街道/门牌，可不填">
         </label>
       </section>
 
@@ -118,6 +130,7 @@
 
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="shared-library.js?v=20260623"></script>
-  <script src="app.js?v=20260631"></script>
+  <script src="china-regions.js?v=20260632"></script>
+  <script src="app.js?v=20260632"></script>
 </body>
 </html>
