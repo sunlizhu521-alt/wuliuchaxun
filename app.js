@@ -966,12 +966,12 @@ function buildCalculationDetail({ item, isBest, product, purchaseQty, totalVolum
 
 function renderResults() {
   if (!state.results.length) {
-    els.resultBody.innerHTML = `<tr><td colspan="13" class="empty">暂无查询结果</td></tr>`;
+    els.resultBody.innerHTML = `<tr><td colspan="14" class="empty">暂无查询结果</td></tr>`;
     els.exportResults.disabled = true;
     return;
   }
-  els.resultBody.innerHTML = state.results.map((row) => `
-    <tr>
+  els.resultBody.innerHTML = state.results.map((row, index) => `
+    <tr class="result-main-row">
       <td>${escapeHtml(row.salesProductLine)}</td>
       <td>${escapeHtml(row.salesSeries)}</td>
       <td>${escapeHtml(row.model)}</td>
@@ -985,9 +985,7 @@ function renderResults() {
       <td>${row.cost === "" ? "未匹配" : escapeHtml(row.cost)}</td>
       <td>${escapeHtml(row.backupCarriers)}</td>
       <td>${escapeHtml(row.backupCosts)}</td>
-    </tr>
-    <tr class="calculation-row">
-      <td colspan="13">${renderCalculationDetails(row)}</td>
+      <td class="calculation-cell">${renderCalculationDetails(row, index)}</td>
     </tr>
   `).join("");
   const matched = state.results.filter((row) => row.carrier).length;
@@ -998,9 +996,11 @@ function renderResults() {
   els.exportResults.disabled = false;
 }
 
-function renderCalculationDetails(row) {
+function renderCalculationDetails(row, index) {
+  const sequence = index + 1;
+  const title = `第 ${sequence} 条 · ${row.materialCode || "-"} · ${row.carrier || "未匹配"}`;
   if (!row.calculationDetails?.length) {
-    return `<div class="calculation-empty">计算过程：${escapeHtml(row.message || "没有匹配到可用物流报价。")}</div>`;
+    return `<div class="calculation-empty"><strong>${escapeHtml(title)}</strong>：${escapeHtml(row.message || "没有匹配到可用物流报价。")}</div>`;
   }
   const list = row.calculationDetails.map((detail) => `
     <div class="calculation-item ${detail.role === "推荐物流" ? "is-best" : ""}">
@@ -1025,7 +1025,7 @@ function renderCalculationDetails(row) {
       </div>
     </div>
   `).join("");
-  return `<div class="calculation-box"><div class="calculation-label">详细计算过程</div>${list}</div>`;
+  return `<div class="calculation-box"><div class="calculation-label">${escapeHtml(title)} · 详细计算过程</div><div class="calculation-list">${list}</div></div>`;
 }
 
 function downloadBatchTemplate() {

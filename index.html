@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>物流查询系统</title>
-  <link rel="stylesheet" href="styles.css?v=20260643">
+  <link rel="stylesheet" href="styles.css?v=20260645">
 </head>
 <body>
   <div class="app-shell">
@@ -98,7 +98,7 @@
           </div>
           <button class="button" id="exportResults" disabled>导出结果</button>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap result-table-wrap">
           <table>
             <thead>
               <tr>
@@ -115,10 +115,11 @@
                 <th>预估费用</th>
                 <th>备选物流</th>
                 <th>备选物流费用</th>
+                <th>详细计算过程</th>
               </tr>
             </thead>
             <tbody id="resultBody">
-              <tr><td colspan="13" class="empty">暂无查询结果</td></tr>
+              <tr><td colspan="14" class="empty">暂无查询结果</td></tr>
             </tbody>
           </table>
         </div>
@@ -144,6 +145,6 @@
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="shared-library.js?v=20260623"></script>
   <script src="china-regions.js?v=20260632"></script>
-  <script src="app.js?v=20260643"></script>
+  <script src="app.js?v=20260645"></script>
 </body>
 </html>

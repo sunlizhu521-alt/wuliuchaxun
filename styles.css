@@ -248,8 +248,21 @@ select {
   overflow-x: auto;
 }
 
+.result-table-wrap {
+  max-height: 2200px;
+  overflow: auto;
+  border-bottom: 1px solid var(--line);
+}
+
+.result-table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
 table {
   width: 100%;
+  min-width: 1880px;
   border-collapse: collapse;
   background: #fff;
 }
@@ -268,17 +281,19 @@ th {
   font-weight: 700;
 }
 
-.calculation-row td {
+.calculation-cell {
+  min-width: 420px;
+  max-width: 520px;
   padding: 0;
-  border-top: 0;
   background: #fbfdff;
   text-align: left;
+  vertical-align: top;
 }
 
 .calculation-box {
   display: grid;
-  gap: 10px;
-  padding: 12px 14px 14px;
+  gap: 8px;
+  padding: 8px 10px;
   border-left: 3px solid var(--primary);
 }
 
@@ -288,10 +303,18 @@ th {
   font-weight: 800;
 }
 
-.calculation-item {
+.calculation-list {
   display: grid;
   gap: 8px;
-  padding: 10px 12px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.calculation-item {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
   border: 1px solid #dce4ef;
   border-radius: 8px;
   background: #fff;
@@ -318,23 +341,23 @@ th {
 
 .calculation-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 10px;
   color: #475467;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .calculation-steps {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 6px;
   color: #344054;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .calculation-steps span,
 .calculation-steps strong {
-  padding: 4px 8px;
+  padding: 3px 6px;
   border: 1px solid #e5ebf3;
   border-radius: 6px;
   background: #fff;
