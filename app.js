@@ -198,6 +198,7 @@ function normalizeProducts(packageRows, infoRows = []) {
     const salesSeries = packageIdentity.salesSeries || info?.salesSeries || "";
     if (!model && !materialCode && !salesSeries) return null;
     const packages = parsePackages(row);
+    const singleWeight = roundWeight(packages.reduce((sum, item) => sum + (item.weight || item.chargeWeight || 0), 0));
     const singleChargeWeight = roundWeight(packages.reduce((sum, item) => sum + item.chargeWeight, 0));
     return {
       model,
@@ -206,6 +207,7 @@ function normalizeProducts(packageRows, infoRows = []) {
       name: packageIdentity.name || info?.name || "",
       packages,
       packageCount: packages.length,
+      singleWeight,
       singleChargeWeight,
       raw: row
     };
@@ -214,7 +216,7 @@ function normalizeProducts(packageRows, infoRows = []) {
 
 function normalizeProductIdentity(row) {
   return {
-    model: clean(pick(row, ["型号", "商品型号", "产品型号", "SKU", "sku", "model"])),
+    model: clean(pick(row, ["销售型号", "型号", "商品型号", "产品型号", "SKU", "sku", "model"])),
     materialCode: clean(pick(row, ["物料编码", "物料代码", "商品编码", "产品编码", "存货编码"])),
     salesSeries: clean(pick(row, ["销售系列", "系列", "产品系列", "商品系列"])),
     name: clean(pick(row, ["商品名称", "品名", "产品名称", "物料名称"]))
@@ -471,9 +473,14 @@ function calculateCost(quote, weight) {
 
 function buildResult(input, origin, product, best, candidates, message) {
   const purchaseQty = parsePurchaseQty(input.purchaseQty);
+  const singleWeight = product?.singleWeight || 0;
   const singleChargeWeight = product?.singleChargeWeight || 0;
+  const totalWeight = product ? roundWeight(singleWeight * purchaseQty) : 0;
   const totalChargeWeight = product ? roundWeight(singleChargeWeight * purchaseQty) : 0;
   const quote = best?.quote || {};
+  const alternatives = best
+    ? candidates.filter((item) => item !== best)
+    : candidates;
   return {
     origin: clean(input.origin),
     quoteZone: origin?.quoteZone || normalizeQuoteZone(input.origin) || "",
@@ -481,41 +488,42 @@ function buildResult(input, origin, product, best, candidates, message) {
     model: product?.model || clean(input.model),
     materialCode: product?.materialCode || clean(input.materialCode),
     salesSeries: product?.salesSeries || clean(input.salesSeries),
+    productName: product?.name || "",
     purchaseQty,
     packageCount: product?.packageCount || 0,
+    totalWeight,
     singleChargeWeight,
     totalChargeWeight,
     carrier: quote.carrier || "",
     cost: best ? best.cost : "",
     region: best?.match?.label || "",
     candidateCount: candidates.length,
+    backupCarriers: alternatives.map((item) => item.quote.carrier).join("、"),
+    backupCosts: alternatives.map((item) => item.cost).join("、"),
     message: message || quote.remark || quote.limit || "费用最低"
   };
 }
 
 function renderResults() {
   if (!state.results.length) {
-    els.resultBody.innerHTML = `<tr><td colspan="15" class="empty">暂无查询结果</td></tr>`;
+    els.resultBody.innerHTML = `<tr><td colspan="12" class="empty">暂无查询结果</td></tr>`;
     els.exportResults.disabled = true;
     return;
   }
   els.resultBody.innerHTML = state.results.map((row) => `
     <tr>
-      <td>${escapeHtml(row.origin)}</td>
-      <td>${escapeHtml(row.quoteZone)}</td>
-      <td>${escapeHtml(row.address)}</td>
+      <td>${escapeHtml(row.salesSeries)}</td>
       <td>${escapeHtml(row.model)}</td>
       <td>${escapeHtml(row.materialCode)}</td>
-      <td>${escapeHtml(row.salesSeries)}</td>
+      <td>${escapeHtml(row.productName)}</td>
       <td>${escapeHtml(row.purchaseQty)}</td>
       <td>${escapeHtml(row.packageCount)}</td>
-      <td>${escapeHtml(row.singleChargeWeight)}</td>
+      <td>${escapeHtml(row.totalWeight)}</td>
       <td>${escapeHtml(row.totalChargeWeight)}</td>
       <td>${escapeHtml(row.carrier || "未匹配")}</td>
       <td>${row.cost === "" ? "未匹配" : escapeHtml(row.cost)}</td>
-      <td>${escapeHtml(row.region)}</td>
-      <td>${escapeHtml(row.candidateCount)}</td>
-      <td>${escapeHtml(row.message)}</td>
+      <td>${escapeHtml(row.backupCarriers)}</td>
+      <td>${escapeHtml(row.backupCosts)}</td>
     </tr>
   `).join("");
   const matched = state.results.filter((row) => row.carrier).length;
@@ -536,21 +544,18 @@ function downloadBatchTemplate() {
 
 function exportResults() {
   const rows = state.results.map((row) => ({
-    发货地: row.origin,
-    报价区域: row.quoteZone,
-    顾客地址: row.address,
-    型号: row.model,
-    物料编码: row.materialCode,
     销售系列: row.salesSeries,
-    购买件数: row.purchaseQty,
-    包裹数: row.packageCount,
-    单件计费重量: row.singleChargeWeight,
+    销售型号: row.model,
+    物料编码: row.materialCode,
+    商品名称: row.productName,
+    购买数量: row.purchaseQty,
+    每件包裹件数: row.packageCount,
+    总重量: row.totalWeight,
     总计费重量: row.totalChargeWeight,
     推荐物流: row.carrier,
     预估费用: row.cost,
-    匹配区域: row.region,
-    备选数量: row.candidateCount,
-    失败原因或说明: row.message
+    备选物流: row.backupCarriers,
+    备选物流费用: row.backupCosts
   }));
   const worksheet = XLSX.utils.json_to_sheet(rows);
   const workbook = XLSX.utils.book_new();
