@@ -169,11 +169,25 @@ select {
 
 .toolbar {
   display: grid;
-  grid-template-columns: 190px minmax(260px, 1fr) 220px 100px auto;
   gap: 12px;
   align-items: end;
   padding: 16px;
   margin-bottom: 16px;
+}
+
+.address-toolbar {
+  grid-template-columns: 190px minmax(320px, 1fr);
+}
+
+.material-toolbar {
+  grid-template-columns: 86px minmax(170px, 1fr) minmax(170px, 1fr) minmax(170px, 1fr) 112px auto;
+}
+
+.toolbar-title {
+  align-self: center;
+  color: #111827;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .field {
@@ -545,6 +559,15 @@ th {
     grid-template-columns: 1fr 1fr;
   }
 
+  .address-toolbar,
+  .material-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .toolbar-title {
+    grid-column: 1 / -1;
+  }
+
   .metrics,
   .slot-grid,
   .library-grid {
@@ -563,6 +586,8 @@ th {
   }
 
   .toolbar,
+  .address-toolbar,
+  .material-toolbar,
   .metrics,
   .slot-grid,
   .library-grid {

@@ -4,6 +4,7 @@ const STORE_NAME = "dimension-files";
 
 const slotIds = {
   origin: "dim-origin-address",
+  productInfo: "dim-product-info",
   productPackage: "dim-product-package"
 };
 
@@ -26,8 +27,12 @@ const els = {
   originSelect: document.getElementById("originSelect"),
   addressInput: document.getElementById("addressInput"),
   modelInput: document.getElementById("modelInput"),
+  materialCodeInput: document.getElementById("materialCodeInput"),
+  salesSeriesInput: document.getElementById("salesSeriesInput"),
   quantityInput: document.getElementById("quantityInput"),
   modelList: document.getElementById("modelList"),
+  materialCodeList: document.getElementById("materialCodeList"),
+  salesSeriesList: document.getElementById("salesSeriesList"),
   runQuery: document.getElementById("runQuery"),
   reloadLibrary: document.getElementById("reloadLibrary"),
   resultBody: document.getElementById("resultBody"),
@@ -78,7 +83,10 @@ async function loadLibrary() {
     await window.LogisticsSharedLibrary?.importSharedLibrary?.();
     const records = await loadAppliedRecords();
     state.origins = normalizeOrigins(await rowsFromRecord(records.get(slotIds.origin)));
-    state.products = normalizeProducts(await rowsFromRecord(records.get(slotIds.productPackage)));
+    state.products = normalizeProducts(
+      await rowsFromRecord(records.get(slotIds.productPackage)),
+      await rowsFromRecord(records.get(slotIds.productInfo))
+    );
     state.quotes = [];
 
     for (const quoteSlot of quoteSlots) {
@@ -88,7 +96,7 @@ async function loadLibrary() {
 
     renderSourceState(records);
     renderOriginOptions();
-    renderModelOptions();
+    renderProductOptions();
     toast("维度表已刷新。");
   } catch (error) {
     console.error(error);
@@ -177,21 +185,48 @@ function normalizeOrigins(rows) {
   }).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
 }
 
-function normalizeProducts(rows) {
-  return rows.map((row) => {
-    const model = clean(pick(row, ["型号", "商品型号", "产品型号", "SKU", "sku", "model"]));
-    if (!model) return null;
+function normalizeProducts(packageRows, infoRows = []) {
+  const infoItems = infoRows
+    .map((row) => normalizeProductIdentity(row))
+    .filter((item) => item.model || item.materialCode || item.salesSeries);
+
+  return packageRows.map((row) => {
+    const packageIdentity = normalizeProductIdentity(row);
+    const info = findProductInfo(packageIdentity, infoItems);
+    const model = packageIdentity.model || info?.model || "";
+    const materialCode = packageIdentity.materialCode || info?.materialCode || "";
+    const salesSeries = packageIdentity.salesSeries || info?.salesSeries || "";
+    if (!model && !materialCode && !salesSeries) return null;
     const packages = parsePackages(row);
     const singleChargeWeight = roundWeight(packages.reduce((sum, item) => sum + item.chargeWeight, 0));
     return {
       model,
-      name: clean(pick(row, ["商品名称", "品名", "产品名称", "物料名称"])),
+      materialCode,
+      salesSeries,
+      name: packageIdentity.name || info?.name || "",
       packages,
       packageCount: packages.length,
       singleChargeWeight,
       raw: row
     };
   }).filter(Boolean);
+}
+
+function normalizeProductIdentity(row) {
+  return {
+    model: clean(pick(row, ["型号", "商品型号", "产品型号", "SKU", "sku", "model"])),
+    materialCode: clean(pick(row, ["物料编码", "物料代码", "商品编码", "产品编码", "存货编码"])),
+    salesSeries: clean(pick(row, ["销售系列", "系列", "产品系列", "商品系列"])),
+    name: clean(pick(row, ["商品名称", "品名", "产品名称", "物料名称"]))
+  };
+}
+
+function findProductInfo(packageIdentity, infoItems) {
+  if (!infoItems.length) return null;
+  return infoItems.find((item) => (
+    (packageIdentity.materialCode && sameText(item.materialCode, packageIdentity.materialCode))
+    || (packageIdentity.model && sameText(item.model, packageIdentity.model))
+  )) || null;
 }
 
 function parsePackages(row) {
@@ -227,9 +262,6 @@ function parsePackages(row) {
 
 function normalizeQuotes(rows, slot) {
   return rows.map((row) => {
-    const province = clean(pick(row, ["目的省", "省", "省份", "收货省"]));
-    const city = clean(pick(row, ["目的市", "市", "城市", "收货市"]));
-    const district = clean(pick(row, ["目的区", "区", "区县", "目的区县", "收货区县"]));
     const canShipText = clean(pick(row, ["是否可发", "可发", "是否可送", "是否配送"]));
     const firstFee = parseNumber(pick(row, ["首重费用", "首重价格", "首重费", "首费"]));
     const stepFee = parseNumber(pick(row, ["续重费用", "续重价格", "续重费"]));
@@ -239,9 +271,9 @@ function normalizeQuotes(rows, slot) {
       slotId: slot.id,
       carrier: slot.carrier,
       quoteZone: slot.zone,
-      province,
-      city,
-      district,
+      province: clean(pick(row, ["目的省", "省", "省份", "收货省"])),
+      city: clean(pick(row, ["目的市", "市", "城市", "收货市"])),
+      district: clean(pick(row, ["目的区", "区", "区县", "目的区县", "收货区县"])),
       firstWeight: parseNumber(pick(row, ["首重kg", "首重", "首重重量"])) || 1,
       firstFee,
       stepWeight: parseNumber(pick(row, ["续重kg", "续重", "续重单位", "计费单位"])) || 1,
@@ -277,9 +309,15 @@ function renderOriginOptions() {
     .join("");
 }
 
-function renderModelOptions() {
-  const models = [...new Set(state.products.map((item) => item.model))].sort((a, b) => a.localeCompare(b, "zh-CN"));
-  els.modelList.innerHTML = models.map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
+function renderProductOptions() {
+  fillDatalist(els.modelList, state.products.map((item) => item.model).filter(Boolean));
+  fillDatalist(els.materialCodeList, state.products.map((item) => item.materialCode).filter(Boolean));
+  fillDatalist(els.salesSeriesList, state.products.map((item) => item.salesSeries).filter(Boolean));
+}
+
+function fillDatalist(node, values) {
+  const unique = [...new Set(values)].sort((a, b) => a.localeCompare(b, "zh-CN"));
+  node.innerHTML = unique.map((value) => `<option value="${escapeHtml(value)}"></option>`).join("");
 }
 
 function runSingleQuery() {
@@ -287,6 +325,8 @@ function runSingleQuery() {
     origin: els.originSelect.value,
     address: els.addressInput.value.trim(),
     model: els.modelInput.value.trim(),
+    materialCode: els.materialCodeInput.value.trim(),
+    salesSeries: els.salesSeriesInput.value.trim(),
     purchaseQty: parsePurchaseQty(els.quantityInput.value)
   });
   state.results = [result];
@@ -302,7 +342,9 @@ async function importBatchFile(file) {
       origin: pick(row, ["发货地", "发货仓", "仓库"]) || els.originSelect.value,
       address: pick(row, ["顾客地址", "客户地址", "收货地址", "地址"]) || "",
       model: pick(row, ["型号", "商品型号", "SKU", "sku"]) || "",
-      purchaseQty: parsePurchaseQty(pick(row, ["商品购买件数", "购买件数", "件数", "数量"]))
+      materialCode: pick(row, ["物料编码", "物料代码", "商品编码", "产品编码", "存货编码"]) || "",
+      salesSeries: pick(row, ["销售系列", "系列", "产品系列", "商品系列"]) || "",
+      purchaseQty: parsePurchaseQty(pick(row, ["购买件数", "商品购买件数", "件数", "数量"]))
     }));
     renderResults();
     toast(`已导入 ${state.results.length} 条地址查询。`);
@@ -316,22 +358,28 @@ function calculateBestOption(input) {
   const originName = clean(input.origin);
   const address = clean(input.address);
   const model = clean(input.model);
+  const materialCode = clean(input.materialCode);
+  const salesSeries = clean(input.salesSeries);
   const purchaseQty = parsePurchaseQty(input.purchaseQty);
   const origin = findOrigin(originName);
-  const product = findProduct(model);
+  const match = findProductMatch({ model, materialCode, salesSeries });
+  const product = match.product;
   const quoteZone = origin?.quoteZone || normalizeQuoteZone(originName);
 
-  if (!originName || !address || !model) {
-    return buildResult(input, origin, product, null, [], "缺少发货地、顾客地址或型号。");
+  if (!originName || !address) {
+    return buildResult(input, origin, product, null, [], "缺少发货地或顾客地址。");
+  }
+  if (!model && !materialCode && !salesSeries) {
+    return buildResult(input, origin, product, null, [], "请至少输入型号、物料编码或销售系列中的一个。");
   }
   if (!origin) {
     return buildResult(input, origin, product, null, [], "发货地址表中未找到该发货地。");
   }
-  if (!product) {
-    return buildResult(input, origin, product, null, [], "商品包装明细中未找到该型号。");
+  if (match.error) {
+    return buildResult(input, origin, product, null, [], match.error);
   }
   if (!product.packageCount || !product.singleChargeWeight) {
-    return buildResult(input, origin, product, null, [], "该型号缺少有效包裹重量或计费重量。");
+    return buildResult(input, origin, product, null, [], "该物料缺少有效包裹重量或计费重量。");
   }
   if (!quoteZone) {
     return buildResult(input, origin, product, null, [], "发货地址缺少报价区域，且无法从发货地识别河北/宁波。");
@@ -342,11 +390,11 @@ function calculateBestOption(input) {
     .filter((quote) => sameText(quote.quoteZone, quoteZone))
     .filter((quote) => quote.canShip)
     .map((quote) => {
-      const match = matchAddress(quote, address);
-      if (!match.matched) return null;
+      const addressMatch = matchAddress(quote, address);
+      if (!addressMatch.matched) return null;
       return {
         quote,
-        match,
+        match: addressMatch,
         cost: calculateCost(quote, totalChargeWeight)
       };
     })
@@ -365,8 +413,14 @@ function findOrigin(originName) {
   return state.origins.find((item) => sameText(item.name, originName)) || null;
 }
 
-function findProduct(model) {
-  return state.products.find((item) => sameText(item.model, model)) || null;
+function findProductMatch({ model, materialCode, salesSeries }) {
+  let matches = state.products;
+  if (model) matches = matches.filter((item) => sameText(item.model, model));
+  if (materialCode) matches = matches.filter((item) => sameText(item.materialCode, materialCode));
+  if (salesSeries) matches = matches.filter((item) => sameText(item.salesSeries, salesSeries));
+  if (!matches.length) return { product: null, error: "商品包装明细中未找到匹配的物料。" };
+  if (matches.length > 1) return { product: null, error: "匹配到多个物料，请补充型号或物料编码。" };
+  return { product: matches[0], error: "" };
 }
 
 function matchAddress(quote, address) {
@@ -424,7 +478,9 @@ function buildResult(input, origin, product, best, candidates, message) {
     origin: clean(input.origin),
     quoteZone: origin?.quoteZone || normalizeQuoteZone(input.origin) || "",
     address: clean(input.address),
-    model: clean(input.model),
+    model: product?.model || clean(input.model),
+    materialCode: product?.materialCode || clean(input.materialCode),
+    salesSeries: product?.salesSeries || clean(input.salesSeries),
     purchaseQty,
     packageCount: product?.packageCount || 0,
     singleChargeWeight,
@@ -439,7 +495,7 @@ function buildResult(input, origin, product, best, candidates, message) {
 
 function renderResults() {
   if (!state.results.length) {
-    els.resultBody.innerHTML = `<tr><td colspan="13" class="empty">暂无查询结果</td></tr>`;
+    els.resultBody.innerHTML = `<tr><td colspan="15" class="empty">暂无查询结果</td></tr>`;
     els.exportResults.disabled = true;
     return;
   }
@@ -449,6 +505,8 @@ function renderResults() {
       <td>${escapeHtml(row.quoteZone)}</td>
       <td>${escapeHtml(row.address)}</td>
       <td>${escapeHtml(row.model)}</td>
+      <td>${escapeHtml(row.materialCode)}</td>
+      <td>${escapeHtml(row.salesSeries)}</td>
       <td>${escapeHtml(row.purchaseQty)}</td>
       <td>${escapeHtml(row.packageCount)}</td>
       <td>${escapeHtml(row.singleChargeWeight)}</td>
@@ -467,10 +525,10 @@ function renderResults() {
 
 function downloadBatchTemplate() {
   const rows = [
-    { 发货地: "河北仓", 顾客地址: "浙江省杭州市余杭区示例路1号", 型号: "A100", 商品购买件数: 1 },
-    { 发货地: "宁波仓", 顾客地址: "江苏省南京市建邺区示例路2号", 型号: "B200", 商品购买件数: 2 }
+    { 发货地: "河北仓", 顾客地址: "浙江省杭州市余杭区示例路1号", 型号: "A100", 物料编码: "MAT-A100", 销售系列: "示例系列", 购买件数: 1 },
+    { 发货地: "宁波仓", 顾客地址: "江苏省南京市建邺区示例路2号", 型号: "B200", 物料编码: "MAT-B200", 销售系列: "示例系列", 购买件数: 2 }
   ];
-  const worksheet = XLSX.utils.json_to_sheet(rows, { header: ["发货地", "顾客地址", "型号", "商品购买件数"] });
+  const worksheet = XLSX.utils.json_to_sheet(rows, { header: ["发货地", "顾客地址", "型号", "物料编码", "销售系列", "购买件数"] });
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "地址查询导入模板");
   XLSX.writeFile(workbook, "物流地址查询导入模板.xlsx");
@@ -482,7 +540,9 @@ function exportResults() {
     报价区域: row.quoteZone,
     顾客地址: row.address,
     型号: row.model,
-    商品购买件数: row.purchaseQty,
+    物料编码: row.materialCode,
+    销售系列: row.salesSeries,
+    购买件数: row.purchaseQty,
     包裹数: row.packageCount,
     单件计费重量: row.singleChargeWeight,
     总计费重量: row.totalChargeWeight,

@@ -303,6 +303,8 @@ function downloadSlotTemplate(type) {
       rows: [
         {
           型号: "A100",
+          物料编码: "MAT-A100",
+          销售系列: "示例系列",
           商品名称: "示例商品",
           商品分类: "示例分类",
           品牌: "",
@@ -347,6 +349,8 @@ function downloadSlotTemplate(type) {
 function buildPackageTemplateRow() {
   const row = {
     型号: "A100",
+    物料编码: "MAT-A100",
+    销售系列: "示例系列",
     商品名称: "示例商品",
     备注: ""
   };

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>物流查询系统</title>
-  <link rel="stylesheet" href="styles.css?v=20260622">
+  <link rel="stylesheet" href="styles.css?v=20260623">
 </head>
 <body>
   <div class="app-shell">
@@ -26,7 +26,7 @@
       <header class="page-header">
         <div>
           <h1>物流查询</h1>
-          <p>选择发货地，输入顾客地址、型号和商品购买件数，自动推荐费用最低的物流方案。</p>
+          <p>选择发货地，输入顾客地址，再按型号、物料编码、销售系列和购买件数查询最优物流方案。</p>
         </div>
         <div class="header-actions">
           <button class="button" id="reloadLibrary">刷新维度</button>
@@ -34,7 +34,7 @@
         </div>
       </header>
 
-      <section class="toolbar query-toolbar">
+      <section class="toolbar query-toolbar address-toolbar">
         <label class="field">
           <span>发货地</span>
           <select id="originSelect"></select>
@@ -43,13 +43,27 @@
           <span>顾客地址</span>
           <input id="addressInput" type="text" placeholder="输入省市区和详细地址">
         </label>
+      </section>
+
+      <section class="toolbar material-toolbar">
+        <div class="toolbar-title">物料查询</div>
         <label class="field">
           <span>型号</span>
           <input id="modelInput" type="text" list="modelList" placeholder="输入或选择型号">
           <datalist id="modelList"></datalist>
         </label>
+        <label class="field">
+          <span>物料编码</span>
+          <input id="materialCodeInput" type="text" list="materialCodeList" placeholder="输入物料编码">
+          <datalist id="materialCodeList"></datalist>
+        </label>
+        <label class="field">
+          <span>销售系列</span>
+          <input id="salesSeriesInput" type="text" list="salesSeriesList" placeholder="输入或选择销售系列">
+          <datalist id="salesSeriesList"></datalist>
+        </label>
         <label class="field short">
-          <span>商品购买件数</span>
+          <span>购买件数</span>
           <input id="quantityInput" type="number" min="1" step="1" value="1">
         </label>
         <button class="button primary" id="runQuery">查询最优物流</button>
@@ -90,7 +104,9 @@
                 <th>报价区域</th>
                 <th>顾客地址</th>
                 <th>型号</th>
-                <th>商品购买件数</th>
+                <th>物料编码</th>
+                <th>销售系列</th>
+                <th>购买件数</th>
                 <th>包裹数</th>
                 <th>单件计费重量</th>
                 <th>总计费重量</th>
@@ -102,7 +118,7 @@
               </tr>
             </thead>
             <tbody id="resultBody">
-              <tr><td colspan="13" class="empty">暂无查询结果</td></tr>
+              <tr><td colspan="15" class="empty">暂无查询结果</td></tr>
             </tbody>
           </table>
         </div>
@@ -112,7 +128,7 @@
         <div class="panel-header">
           <div>
             <h2>批量导入查询</h2>
-            <p>支持拖拽 Excel/CSV，字段为：发货地、顾客地址、型号、商品购买件数。</p>
+            <p>支持拖拽 Excel/CSV，字段为：发货地、顾客地址、型号、物料编码、销售系列、购买件数。</p>
           </div>
           <button class="button" id="downloadTemplate">下载导入模板</button>
         </div>
@@ -126,7 +142,7 @@
   </div>
 
   <script src="vendor/xlsx.full.min.js"></script>
-  <script src="shared-library.js?v=20260622"></script>
-  <script src="app.js?v=20260622"></script>
+  <script src="shared-library.js?v=20260623"></script>
+  <script src="app.js?v=20260623"></script>
 </body>
 </html>
