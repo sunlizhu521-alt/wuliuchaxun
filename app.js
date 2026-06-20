@@ -220,6 +220,8 @@ function normalizeProducts(packageRows, infoItems = []) {
     const packages = parsePackages(row);
     const singleWeight = roundWeight(packages.reduce((sum, item) => sum + (item.weight || item.chargeWeight || 0), 0));
     const singleChargeWeight = roundWeight(packages.reduce((sum, item) => sum + item.chargeWeight, 0));
+    const packageCountFromRow = parseNumber(pick(row, ["件数", "包裹件数", "包裹数量", "单件包裹数", "包装件数"]));
+    const totalActualWeightFromRow = parseNumber(pick(row, ["总实际重量", "总实际重量kg", "实际总重量", "实际总重量kg", "总重量", "总重量kg"]));
     return {
       model,
       materialCode,
@@ -228,9 +230,10 @@ function normalizeProducts(packageRows, infoItems = []) {
       name: info?.name || packageIdentity.name || "",
       packages,
       materialCodes,
-      packageCount: materialCodes.length || packages.length,
+      packageCount: packageCountFromRow || materialCodes.length || packages.length,
       singleWeight,
       singleChargeWeight,
+      totalActualWeight: totalActualWeightFromRow,
       raw: row
     };
   }).filter(Boolean);
@@ -786,7 +789,7 @@ function buildResult(input, origin, product, best, candidates, message) {
   const purchaseQty = parsePurchaseQty(input.purchaseQty);
   const singleWeight = product?.singleWeight || 0;
   const singleChargeWeight = product?.singleChargeWeight || 0;
-  const totalWeight = product ? roundWeight(singleWeight * purchaseQty) : 0;
+  const totalActualWeight = product?.totalActualWeight || (product ? roundWeight(singleWeight * purchaseQty) : 0);
   const totalChargeWeight = product ? roundWeight(singleChargeWeight * purchaseQty) : 0;
   const quote = best?.quote || {};
   const alternatives = best
@@ -803,7 +806,7 @@ function buildResult(input, origin, product, best, candidates, message) {
     productName: product?.name || "",
     purchaseQty,
     packageCount: product?.packageCount || 0,
-    totalWeight,
+    totalActualWeight,
     singleChargeWeight,
     totalChargeWeight,
     carrier: quote.carrier || "",
@@ -831,7 +834,7 @@ function renderResults() {
       <td>${escapeHtml(row.productName)}</td>
       <td>${escapeHtml(row.purchaseQty)}</td>
       <td>${escapeHtml(row.packageCount)}</td>
-      <td>${escapeHtml(row.totalWeight)}</td>
+      <td>${escapeHtml(row.totalActualWeight)}</td>
       <td>${escapeHtml(row.totalChargeWeight)}</td>
       <td>${escapeHtml(row.carrier || "未匹配")}</td>
       <td>${row.cost === "" ? "未匹配" : escapeHtml(row.cost)}</td>
@@ -867,8 +870,8 @@ function exportResults() {
     商品名称: row.productName,
     购买数量: row.purchaseQty,
     单件包裹数: row.packageCount,
-    总重量: row.totalWeight,
-    总计费重量: row.totalChargeWeight,
+    总实际重量: row.totalActualWeight,
+    总推荐物流计费重量: row.totalChargeWeight,
     推荐物流: row.carrier,
     预估费用: row.cost,
     备选物流: row.backupCarriers,
