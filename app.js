@@ -369,8 +369,8 @@ function calculateBestOption(input) {
   if (!originName || !address) {
     return buildResult(input, origin, product, null, [], "缺少发货地或顾客地址。");
   }
-  if (!model && !materialCode && !salesSeries) {
-    return buildResult(input, origin, product, null, [], "请至少输入型号、物料编码或销售系列中的一个。");
+  if (!materialCode) {
+    return buildResult(input, origin, product, null, [], "物料编码为必填项。");
   }
   if (!origin) {
     return buildResult(input, origin, product, null, [], "发货地址表中未找到该发货地。");
@@ -525,10 +525,10 @@ function renderResults() {
 
 function downloadBatchTemplate() {
   const rows = [
-    { 发货地: "河北仓", 顾客地址: "浙江省杭州市余杭区示例路1号", 型号: "A100", 物料编码: "MAT-A100", 销售系列: "示例系列", 购买件数: 1 },
-    { 发货地: "宁波仓", 顾客地址: "江苏省南京市建邺区示例路2号", 型号: "B200", 物料编码: "MAT-B200", 销售系列: "示例系列", 购买件数: 2 }
+    { 发货地: "河北仓", 顾客地址: "浙江省杭州市余杭区示例路1号", 物料编码: "MAT-A100", 销售系列: "示例系列", 型号: "A100", 购买件数: 1 },
+    { 发货地: "宁波仓", 顾客地址: "江苏省南京市建邺区示例路2号", 物料编码: "MAT-B200", 销售系列: "示例系列", 型号: "B200", 购买件数: 2 }
   ];
-  const worksheet = XLSX.utils.json_to_sheet(rows, { header: ["发货地", "顾客地址", "型号", "物料编码", "销售系列", "购买件数"] });
+  const worksheet = XLSX.utils.json_to_sheet(rows, { header: ["发货地", "顾客地址", "物料编码", "销售系列", "型号", "购买件数"] });
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "地址查询导入模板");
   XLSX.writeFile(workbook, "物流地址查询导入模板.xlsx");
