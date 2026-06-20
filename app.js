@@ -26,6 +26,8 @@ const state = {
 
 const els = {
   originSelect: document.getElementById("originSelect"),
+  pastedAddressInput: document.getElementById("pastedAddressInput"),
+  recognizeAddressBtn: document.getElementById("recognizeAddressBtn"),
   provinceSelect: document.getElementById("provinceSelect"),
   citySelect: document.getElementById("citySelect"),
   districtSelect: document.getElementById("districtSelect"),
@@ -56,6 +58,10 @@ async function init() {
 function bindEvents() {
   els.reloadLibrary.addEventListener("click", loadLibrary);
   els.runQuery.addEventListener("click", runSingleQuery);
+  els.recognizeAddressBtn.addEventListener("click", recognizePastedAddress);
+  els.pastedAddressInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") recognizePastedAddress();
+  });
   els.provinceSelect.addEventListener("change", () => {
     renderCityOptions();
     renderDistrictOptions();
@@ -354,6 +360,50 @@ function getChinaRegions() {
   return Array.isArray(window.CHINA_REGIONS) ? window.CHINA_REGIONS : [];
 }
 
+function getRegionAliases(region) {
+  const name = clean(region?.name);
+  if (!name) return [];
+  const shortName = name
+    .replace(/特别行政区$/, "")
+    .replace(/维吾尔自治区$/, "")
+    .replace(/壮族自治区$/, "")
+    .replace(/回族自治区$/, "")
+    .replace(/自治区$/, "")
+    .replace(/自治州$/, "")
+    .replace(/地区$/, "")
+    .replace(/省$/, "")
+    .replace(/市$/, "")
+    .replace(/盟$/, "")
+    .replace(/区$/, "")
+    .replace(/县$/, "");
+  return [...new Set([name, shortName].filter((item) => item.length >= 2))];
+}
+
+function findRegionMatch(text, regions) {
+  const compact = clean(text).replace(/\s+/g, "");
+  const matches = [];
+  for (const region of regions || []) {
+    for (const alias of getRegionAliases(region)) {
+      const index = compact.indexOf(alias);
+      if (index >= 0) matches.push({ region, alias, index });
+    }
+  }
+  return matches.sort((a, b) => a.index - b.index || b.alias.length - a.alias.length)[0] || null;
+}
+
+function isDirectProvince(province) {
+  return ["北京市", "天津市", "上海市", "重庆市", "香港特别行政区", "澳门特别行政区"].includes(province?.name);
+}
+
+function inferProvinceByCity(text) {
+  const matches = [];
+  for (const province of getChinaRegions()) {
+    const match = findRegionMatch(text, getCityOptions(province));
+    if (match) matches.push({ province, cityMatch: match });
+  }
+  return matches.sort((a, b) => a.cityMatch.index - b.cityMatch.index || b.cityMatch.alias.length - a.cityMatch.alias.length)[0] || null;
+}
+
 function renderProvinceOptions() {
   const regions = getChinaRegions();
   els.provinceSelect.innerHTML = `<option value="">请选择省</option>` + regions
@@ -419,6 +469,68 @@ function buildManualCustomerAddress() {
   if (district?.name) parts.push(district.name);
   if (detail) parts.push(detail);
   return { address: parts.join(""), error: "" };
+}
+
+function recognizePastedAddress() {
+  const parsed = parsePastedAddress(els.pastedAddressInput.value);
+  if (parsed.error) {
+    toast(parsed.error);
+    return;
+  }
+
+  els.provinceSelect.value = parsed.province.code;
+  renderCityOptions();
+  els.citySelect.value = parsed.city.code;
+  renderDistrictOptions();
+  els.districtSelect.value = parsed.district?.code || "";
+  els.addressInput.value = parsed.detail;
+  toast("地址识别完成。");
+}
+
+function parsePastedAddress(address) {
+  const text = clean(address).replace(/\s+/g, "");
+  if (!text) return { error: "请先粘贴顾客地址。" };
+
+  const provinceMatch = findRegionMatch(text, getChinaRegions());
+  let province = provinceMatch?.region || null;
+  let city = null;
+  let cityMatch = null;
+  let citySearchText = text;
+
+  if (province) {
+    citySearchText = text.slice(provinceMatch.index + provinceMatch.alias.length);
+    if (isDirectProvince(province)) {
+      city = getCityOptions(province)[0] || null;
+    } else {
+      cityMatch = findRegionMatch(citySearchText, getCityOptions(province));
+      city = cityMatch?.region || null;
+    }
+  } else {
+    const inferred = inferProvinceByCity(text);
+    province = inferred?.province || null;
+    cityMatch = inferred?.cityMatch || null;
+    city = cityMatch?.region || null;
+    citySearchText = text;
+  }
+
+  if (!province) return { error: "未识别到省份，请检查地址内容。" };
+  if (!city) return { error: "未识别到城市，请检查地址内容。" };
+
+  const afterCity = cityMatch
+    ? citySearchText.slice(cityMatch.index + cityMatch.alias.length)
+    : citySearchText;
+  const districtMatch = findRegionMatch(afterCity, city.children || []);
+  const detail = districtMatch
+    ? afterCity.slice(districtMatch.index + districtMatch.alias.length)
+    : afterCity;
+
+  return {
+    province,
+    city,
+    district: districtMatch?.region || null,
+    detail: detail.replace(/^[,，、\s-]+/, ""),
+    error: ""
+  };
 }
 
 function updateProductInfoFields() {
