@@ -378,7 +378,7 @@ function parseWeightPriceRule(row) {
     const fee = parseNumber(value);
     if (!fee) continue;
     const text = normalizeHeaderText(header);
-    const firstMatch = text.match(/^首重[（(]\s*(\d+(?:\.\d+)?)\s*kg\s*[）)]$/i);
+    const firstMatch = text.match(/^首重(?:[（(])?\s*(\d+(?:\.\d+)?)\s*kg?\s*(?:[）)])?$/i);
     if (firstMatch) {
       rule.firstWeight = Number(firstMatch[1]);
       rule.firstFee = fee;
@@ -393,7 +393,7 @@ function parseWeightPriceRule(row) {
       });
       continue;
     }
-    const aboveMatch = text.match(/^续重[（(]\s*(\d+(?:\.\d+)?)\s*kg\s*以上\s*[）)]$/i);
+    const aboveMatch = text.match(/^续重[（(]\s*(\d+(?:\.\d+)?)\s*(?:kg)?\s*以上\s*[）)]$/i);
     if (aboveMatch) {
       rule.steps.push({
         from: Number(aboveMatch[1]),
