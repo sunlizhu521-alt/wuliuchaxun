@@ -31,41 +31,41 @@ const slots = [
   },
   {
     id: "quote-sf-hebei",
-    name: "顺丰-河北报价",
-    expectedName: "顺丰-河北报价.xlsx",
-    description: "河北发货地使用的顺丰报价表。",
+    name: "物流公司报价",
+    expectedName: "物流公司报价.xlsx",
+    description: "物流公司报价表维护槽位，用于查询页读取物流报价。",
     template: "quote",
     keywords: ["目的省", "目的市", "首重kg", "续重费用", "是否可发"]
   },
   {
     id: "quote-jd-hebei",
-    name: "京东-河北报价",
-    expectedName: "京东-河北报价.xlsx",
-    description: "河北发货地使用的京东报价表。",
+    name: "维度1",
+    expectedName: "维度1.xlsx",
+    description: "维度1扩展报价表槽位，用于查询页读取对应报价数据。",
     template: "quote",
     keywords: ["目的省", "目的市", "首重kg", "续重费用", "是否可发"]
   },
   {
     id: "quote-sf-ningbo",
-    name: "顺丰-宁波报价",
-    expectedName: "顺丰-宁波报价.xlsx",
-    description: "宁波发货地使用的顺丰报价表。",
+    name: "维度2",
+    expectedName: "维度2.xlsx",
+    description: "维度2扩展报价表槽位，用于查询页读取对应报价数据。",
     template: "quote",
     keywords: ["目的省", "目的市", "首重kg", "续重费用", "是否可发"]
   },
   {
     id: "quote-jd-ningbo",
-    name: "京东-宁波报价",
-    expectedName: "京东-宁波报价.xlsx",
-    description: "宁波发货地使用的京东报价表。",
+    name: "维度3",
+    expectedName: "维度3.xlsx",
+    description: "维度3扩展报价表槽位，用于查询页读取对应报价数据。",
     template: "quote",
     keywords: ["目的省", "目的市", "首重kg", "续重费用", "是否可发"]
   },
   {
     id: "quote-zt-hebei",
-    name: "中通-河北报价",
-    expectedName: "中通-河北报价.xlsx",
-    description: "河北发货地使用的中通报价表。",
+    name: "维度4",
+    expectedName: "维度4.xlsx",
+    description: "维度4扩展报价表槽位，用于查询页读取对应报价数据。",
     template: "quote",
     keywords: ["目的省", "目的市", "首重kg", "续重费用", "是否可发"]
   }
