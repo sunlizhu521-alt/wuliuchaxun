@@ -1029,14 +1029,239 @@ function renderCalculationDetails(row) {
 }
 
 function downloadBatchTemplate() {
-  const rows = [
-    { 发货地: "河北供应商", 顾客地址: "浙江省杭州市余杭区示例路1号", 物料编码: "MAT-A100", 购买件数: 1 },
-    { 发货地: "宁波供应商", 顾客地址: "江苏省南京市建邺区示例路2号", 物料编码: "MAT-B200", 购买件数: 2 }
+  const originNames = state.origins.map((origin) => origin.supplierShortName || origin.name).filter(Boolean);
+  if (!originNames.length) {
+    toast("发货地选项为空，请先在维度表库上传并应用发货地址。");
+  }
+  const templateRows = [
+    ["顾客地址", "物料编码", "购买件数", "发货地"],
+    ["浙江省杭州市余杭区示例路1号", "MAT-A100", 1, ""],
+    ["江苏省南京市建邺区示例路2号", "MAT-B200", 2, ""]
   ];
-  const worksheet = XLSX.utils.json_to_sheet(rows, { header: ["发货地", "顾客地址", "物料编码", "购买件数"] });
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "地址查询导入模板");
-  XLSX.writeFile(workbook, "物流地址查询导入模板.xlsx");
+  const workbookBytes = createBatchTemplateWorkbook(templateRows, originNames);
+  downloadBinaryFile("物流地址查询导入模板.xlsx", workbookBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+}
+
+function createBatchTemplateWorkbook(rows, originNames) {
+  const optionNames = originNames.length ? originNames : [""];
+  const files = {
+    "[Content_Types].xml": buildContentTypesXml(),
+    "_rels/.rels": buildRootRelsXml(),
+    "xl/workbook.xml": buildWorkbookXml(),
+    "xl/_rels/workbook.xml.rels": buildWorkbookRelsXml(),
+    "xl/styles.xml": buildStylesXml(),
+    "xl/worksheets/sheet1.xml": buildTemplateSheetXml(rows, optionNames.length),
+    "xl/worksheets/sheet2.xml": buildOriginOptionsSheetXml(optionNames)
+  };
+  return createZip(files);
+}
+
+function buildContentTypesXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`;
+}
+
+function buildRootRelsXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`;
+}
+
+function buildWorkbookXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="地址查询导入模板" sheetId="1" r:id="rId1"/>
+    <sheet name="发货地选项" sheetId="2" state="hidden" r:id="rId2"/>
+  </sheets>
+</workbook>`;
+}
+
+function buildWorkbookRelsXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
+}
+
+function buildStylesXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="2"><font><sz val="11"/><name val="Microsoft YaHei"/></font><font><b/><sz val="11"/><name val="Microsoft YaHei"/></font></fonts>
+  <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>
+  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+}
+
+function buildTemplateSheetXml(rows, optionCount) {
+  const sheetRows = rows.map((row, rowIndex) => {
+    const cells = row.map((value, colIndex) => buildCellXml(rowIndex + 1, colIndex + 1, value, rowIndex === 0 ? 1 : 0)).join("");
+    return `<row r="${rowIndex + 1}">${cells}</row>`;
+  }).join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <dimension ref="A1:D501"/>
+  <sheetViews><sheetView workbookViewId="0"/></sheetViews>
+  <sheetFormatPr defaultRowHeight="18"/>
+  <cols><col min="1" max="1" width="36" customWidth="1"/><col min="2" max="2" width="18" customWidth="1"/><col min="3" max="3" width="12" customWidth="1"/><col min="4" max="4" width="22" customWidth="1"/></cols>
+  <sheetData>${sheetRows}</sheetData>
+  <dataValidations count="1">
+    <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="D2:D501">
+      <formula1>'发货地选项'!$A$1:$A$${optionCount}</formula1>
+    </dataValidation>
+  </dataValidations>
+</worksheet>`;
+}
+
+function buildOriginOptionsSheetXml(originNames) {
+  const rows = originNames.map((name, index) => `<row r="${index + 1}">${buildCellXml(index + 1, 1, name)}</row>`).join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <dimension ref="A1:A${originNames.length}"/>
+  <sheetViews><sheetView workbookViewId="0"/></sheetViews>
+  <sheetFormatPr defaultRowHeight="18"/>
+  <sheetData>${rows}</sheetData>
+</worksheet>`;
+}
+
+function buildCellXml(rowIndex, colIndex, value, styleIndex = 0) {
+  const ref = `${columnName(colIndex)}${rowIndex}`;
+  const style = styleIndex ? ` s="${styleIndex}"` : "";
+  if (typeof value === "number") return `<c r="${ref}"${style}><v>${value}</v></c>`;
+  return `<c r="${ref}" t="inlineStr"${style}><is><t>${xmlEscape(value)}</t></is></c>`;
+}
+
+function columnName(index) {
+  let name = "";
+  while (index > 0) {
+    const mod = (index - 1) % 26;
+    name = String.fromCharCode(65 + mod) + name;
+    index = Math.floor((index - 1) / 26);
+  }
+  return name;
+}
+
+function createZip(files) {
+  const encoder = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  for (const [name, content] of Object.entries(files)) {
+    const nameBytes = encoder.encode(name);
+    const data = encoder.encode(content.replace(/\r?\n/g, ""));
+    const crc = crc32(data);
+    const localHeader = new Uint8Array(30 + nameBytes.length);
+    const localView = new DataView(localHeader.buffer);
+    localView.setUint32(0, 0x04034b50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(6, 0, true);
+    localView.setUint16(8, 0, true);
+    localView.setUint16(10, 0, true);
+    localView.setUint16(12, 0, true);
+    localView.setUint32(14, crc, true);
+    localView.setUint32(18, data.length, true);
+    localView.setUint32(22, data.length, true);
+    localView.setUint16(26, nameBytes.length, true);
+    localView.setUint16(28, 0, true);
+    localHeader.set(nameBytes, 30);
+    localParts.push(localHeader, data);
+
+    const centralHeader = new Uint8Array(46 + nameBytes.length);
+    const centralView = new DataView(centralHeader.buffer);
+    centralView.setUint32(0, 0x02014b50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint16(8, 0, true);
+    centralView.setUint16(10, 0, true);
+    centralView.setUint16(12, 0, true);
+    centralView.setUint16(14, 0, true);
+    centralView.setUint32(16, crc, true);
+    centralView.setUint32(20, data.length, true);
+    centralView.setUint32(24, data.length, true);
+    centralView.setUint16(28, nameBytes.length, true);
+    centralView.setUint16(30, 0, true);
+    centralView.setUint16(32, 0, true);
+    centralView.setUint16(34, 0, true);
+    centralView.setUint16(36, 0, true);
+    centralView.setUint32(38, 0, true);
+    centralView.setUint32(42, offset, true);
+    centralHeader.set(nameBytes, 46);
+    centralParts.push(centralHeader);
+    offset += localHeader.length + data.length;
+  }
+  const centralOffset = offset;
+  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+  const end = new Uint8Array(22);
+  const endView = new DataView(end.buffer);
+  endView.setUint32(0, 0x06054b50, true);
+  endView.setUint16(8, centralParts.length, true);
+  endView.setUint16(10, centralParts.length, true);
+  endView.setUint32(12, centralSize, true);
+  endView.setUint32(16, centralOffset, true);
+  return concatUint8Arrays([...localParts, ...centralParts, end]);
+}
+
+function crc32(bytes) {
+  const table = crc32.table || (crc32.table = buildCrc32Table());
+  let crc = -1;
+  for (const byte of bytes) crc = (crc >>> 8) ^ table[(crc ^ byte) & 0xff];
+  return (crc ^ -1) >>> 0;
+}
+
+function buildCrc32Table() {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let c = i;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[i] = c >>> 0;
+  }
+  return table;
+}
+
+function concatUint8Arrays(parts) {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const output = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    output.set(part, offset);
+    offset += part.length;
+  }
+  return output;
+}
+
+function downloadBinaryFile(fileName, bytes, mimeType) {
+  const blob = new Blob([bytes], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function xmlEscape(value) {
+  return String(value ?? "").replace(/[<>&'"]/g, (char) => ({
+    "<": "&lt;",
+    ">": "&gt;",
+    "&": "&amp;",
+    "'": "&apos;",
+    '"': "&quot;"
+  }[char]));
 }
 
 function exportResults() {
