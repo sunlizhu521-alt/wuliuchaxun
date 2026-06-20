@@ -692,11 +692,13 @@ function calculateBestOption(input) {
       if (!addressMatch.matched) return null;
       const totalChargeWeight = calculateLogisticsChargeWeight(product, purchaseQty, quote);
       if (!Number.isFinite(totalChargeWeight) || totalChargeWeight <= 0) return null;
+      const costDetail = calculateCostDetail(quote, totalChargeWeight);
       return {
         quote,
         match: addressMatch,
         totalChargeWeight,
-        cost: calculateCost(quote, totalChargeWeight)
+        cost: costDetail.total,
+        costDetail
       };
     })
     .filter(Boolean)
@@ -846,21 +848,56 @@ function calculateLogisticsChargeWeight(product, purchaseQty, quote) {
   return roundWeight((product?.singleChargeWeight || 0) * purchaseQty);
 }
 
-function calculateCost(quote, weight) {
-  if (!quote?.firstWeight || !quote?.firstFee) return Number.NaN;
+function calculateCostDetail(quote, weight) {
+  const detail = {
+    firstWeight: quote?.firstWeight || 0,
+    firstFee: quote?.firstFee || 0,
+    minFee: quote?.minFee || 0,
+    chargeWeight: weight,
+    lines: [],
+    subtotal: Number.NaN,
+    total: Number.NaN
+  };
+  if (!quote?.firstWeight || !quote?.firstFee) return detail;
   let cost = quote.firstFee;
+  detail.lines.push({
+    label: `首重 ${quote.firstWeight}kg`,
+    formula: `${formatNumber(quote.firstFee)} 元`,
+    amount: roundMoney(quote.firstFee)
+  });
   if (weight > quote.firstWeight) {
     const sortedSteps = [...(quote.steps || [])].sort((a, b) => a.from - b.from);
-    for (const step of sortedSteps) {
-      const from = Math.max(step.from, quote.firstWeight);
+    for (const [index, step] of sortedSteps.entries()) {
+      const from = index === 0 ? quote.firstWeight : Math.max(step.from, quote.firstWeight);
       const to = Number.isFinite(step.to) ? step.to : weight;
       const billable = Math.max(0, Math.min(weight, to) - from);
-      if (billable > 0) cost += billable * step.fee;
+      if (billable > 0) {
+        const amount = billable * step.fee;
+        cost += amount;
+        detail.lines.push({
+          label: Number.isFinite(step.to) ? `续重 ${from}-${step.to}kg` : `续重 ${from}kg以上`,
+          formula: `${formatNumber(billable)}kg × ${formatNumber(step.fee)} 元/kg`,
+          amount: roundMoney(amount)
+        });
+      }
       if (weight <= to) break;
     }
   }
-  if (quote.minFee) cost = Math.max(cost, quote.minFee);
-  return roundMoney(cost);
+  detail.subtotal = roundMoney(cost);
+  if (quote.minFee && cost < quote.minFee) {
+    detail.lines.push({
+      label: "最低收费调整",
+      formula: `max(${formatNumber(cost)}, ${formatNumber(quote.minFee)})`,
+      amount: roundMoney(quote.minFee - cost)
+    });
+    cost = quote.minFee;
+  }
+  detail.total = roundMoney(cost);
+  return detail;
+}
+
+function calculateCost(quote, weight) {
+  return calculateCostDetail(quote, weight).total;
 }
 
 function buildResult(input, origin, product, best, candidates, message) {
@@ -873,6 +910,8 @@ function buildResult(input, origin, product, best, candidates, message) {
   const alternatives = best
     ? candidates.filter((item) => item !== best)
     : candidates;
+  const totalVolume = product?.totalVolume || 0;
+  const purchasedVolume = product ? roundWeight(totalVolume * purchaseQty) : 0;
   return {
     origin: clean(input.origin),
     quoteZone: origin?.quoteZone || normalizeQuoteZone(input.origin) || "",
@@ -893,7 +932,35 @@ function buildResult(input, origin, product, best, candidates, message) {
     candidateCount: candidates.length,
     backupCarriers: alternatives.map((item) => item.quote.carrier).join("、"),
     backupCosts: alternatives.map((item) => item.cost).join("、"),
+    calculationDetails: candidates.map((item) => buildCalculationDetail({
+      item,
+      isBest: item === best,
+      product,
+      purchaseQty,
+      totalVolume,
+      purchasedVolume
+    })),
     message: message || quote.remark || quote.limit || "费用最低"
+  };
+}
+
+function buildCalculationDetail({ item, isBest, product, purchaseQty, totalVolume, purchasedVolume }) {
+  const quote = item.quote || {};
+  return {
+    carrier: quote.carrier || "",
+    role: isBest ? "推荐物流" : "备选物流",
+    sheetName: quote.sheetName || "",
+    matchedRegion: item.match?.label || "",
+    bubbleRatio: quote.bubbleRatio || 0,
+    purchaseQty,
+    singleVolume: totalVolume || 0,
+    purchasedVolume,
+    chargeWeight: item.totalChargeWeight,
+    cost: item.cost,
+    costLines: item.costDetail?.lines || [],
+    formula: quote.bubbleRatio
+      ? `${formatNumber(totalVolume)} × ${purchaseQty} ÷ ${formatNumber(quote.bubbleRatio)} = ${formatNumber(item.totalChargeWeight)}kg`
+      : `${formatNumber(product?.singleChargeWeight || 0)} × ${purchaseQty} = ${formatNumber(item.totalChargeWeight)}kg`
   };
 }
 
@@ -919,6 +986,9 @@ function renderResults() {
       <td>${escapeHtml(row.backupCarriers)}</td>
       <td>${escapeHtml(row.backupCosts)}</td>
     </tr>
+    <tr class="calculation-row">
+      <td colspan="13">${renderCalculationDetails(row)}</td>
+    </tr>
   `).join("");
   const matched = state.results.filter((row) => row.carrier).length;
   const firstFailure = state.results.find((row) => !row.carrier && row.message);
@@ -926,6 +996,36 @@ function renderResults() {
     ? `共 ${state.results.length} 条，已匹配 ${matched} 条。未匹配原因：${firstFailure.message}`
     : `共 ${state.results.length} 条，已匹配 ${matched} 条。`;
   els.exportResults.disabled = false;
+}
+
+function renderCalculationDetails(row) {
+  if (!row.calculationDetails?.length) {
+    return `<div class="calculation-empty">计算过程：${escapeHtml(row.message || "没有匹配到可用物流报价。")}</div>`;
+  }
+  const list = row.calculationDetails.map((detail) => `
+    <div class="calculation-item ${detail.role === "推荐物流" ? "is-best" : ""}">
+      <div class="calculation-title">
+        <strong>${escapeHtml(detail.role)}：${escapeHtml(detail.carrier)}</strong>
+        <span>费用 ${escapeHtml(formatMoney(detail.cost))} 元</span>
+      </div>
+      <div class="calculation-grid">
+        <span>报价 Sheet：${escapeHtml(detail.sheetName || "-")}</span>
+        <span>匹配区域：${escapeHtml(detail.matchedRegion || "-")}</span>
+        <span>单件总体积：${escapeHtml(formatNumber(detail.singleVolume))}</span>
+        <span>购买件数：${escapeHtml(detail.purchaseQty)}</span>
+        <span>购买总体积：${escapeHtml(formatNumber(detail.purchasedVolume))}</span>
+        <span>泡比：${escapeHtml(formatNumber(detail.bubbleRatio))}</span>
+        <span>计费重量：${escapeHtml(detail.formula)}</span>
+      </div>
+      <div class="calculation-steps">
+        ${detail.costLines.map((line) => `
+          <span>${escapeHtml(line.label)}：${escapeHtml(line.formula)} = ${escapeHtml(formatMoney(line.amount))} 元</span>
+        `).join("")}
+        <strong>合计：${escapeHtml(formatMoney(detail.cost))} 元</strong>
+      </div>
+    </div>
+  `).join("");
+  return `<div class="calculation-box"><div class="calculation-label">详细计算过程</div>${list}</div>`;
 }
 
 function downloadBatchTemplate() {
@@ -953,7 +1053,8 @@ function exportResults() {
     推荐物流: row.carrier,
     预估费用: row.cost,
     备选物流: row.backupCarriers,
-    备选物流费用: row.backupCosts
+    备选物流费用: row.backupCosts,
+    详细计算过程: formatCalculationDetailsForExport(row)
   }));
   const worksheet = XLSX.utils.json_to_sheet(rows);
   const workbook = XLSX.utils.book_new();
@@ -1023,6 +1124,33 @@ function roundWeight(value) {
 function formatDateForFileName(date) {
   const pad = (num) => String(num).padStart(2, "0");
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}`;
+}
+
+function formatNumber(value) {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num)) return "";
+  return String(Math.round(num * 100) / 100);
+}
+
+function formatMoney(value) {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num)) return "";
+  return (Math.round(num * 100) / 100).toFixed(2).replace(/\.00$/, "");
+}
+
+function formatCalculationDetailsForExport(row) {
+  if (!row.calculationDetails?.length) return row.message || "";
+  return row.calculationDetails.map((detail) => {
+    const lines = [
+      `${detail.role}：${detail.carrier}`,
+      `报价Sheet：${detail.sheetName || "-"}`,
+      `匹配区域：${detail.matchedRegion || "-"}`,
+      `计费重量：${detail.formula}`,
+      ...(detail.costLines || []).map((line) => `${line.label}：${line.formula} = ${formatMoney(line.amount)}元`),
+      `合计：${formatMoney(detail.cost)}元`
+    ];
+    return lines.join("；");
+  }).join("\n");
 }
 
 function escapeHtml(value) {

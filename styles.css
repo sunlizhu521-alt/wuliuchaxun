@@ -268,6 +268,84 @@ th {
   font-weight: 700;
 }
 
+.calculation-row td {
+  padding: 0;
+  border-top: 0;
+  background: #fbfdff;
+  text-align: left;
+}
+
+.calculation-box {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border-left: 3px solid var(--primary);
+}
+
+.calculation-label {
+  color: #475467;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.calculation-item {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #dce4ef;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.calculation-item.is-best {
+  border-color: rgba(37, 99, 235, .36);
+  background: #f8fbff;
+}
+
+.calculation-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #111827;
+}
+
+.calculation-title span {
+  color: var(--primary);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.calculation-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px 12px;
+  color: #475467;
+  font-size: 13px;
+}
+
+.calculation-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: #344054;
+  font-size: 13px;
+}
+
+.calculation-steps span,
+.calculation-steps strong {
+  padding: 4px 8px;
+  border: 1px solid #e5ebf3;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.calculation-empty {
+  padding: 12px 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .empty {
   color: var(--muted);
   height: 72px;
@@ -560,6 +638,10 @@ th {
   .library-card.file-slot {
     grid-template-columns: 1fr 1fr;
   }
+
+  .calculation-grid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -584,6 +666,15 @@ th {
 
   .address-detail {
     min-width: 0;
+  }
+
+  .calculation-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .calculation-grid {
+    grid-template-columns: 1fr;
   }
 }
 
