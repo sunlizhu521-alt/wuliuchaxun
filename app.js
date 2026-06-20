@@ -5,16 +5,9 @@ const STORE_NAME = "dimension-files";
 const slotIds = {
   origin: "dim-origin-address",
   productInfo: "dim-product-info",
-  productPackage: "dim-product-package"
+  productPackage: "dim-product-package",
+  logisticsQuote: "quote-sf-hebei"
 };
-
-const quoteSlots = [
-  { id: "quote-sf-hebei", carrier: "顺丰", zone: "河北" },
-  { id: "quote-jd-hebei", carrier: "京东", zone: "河北" },
-  { id: "quote-sf-ningbo", carrier: "顺丰", zone: "宁波" },
-  { id: "quote-jd-ningbo", carrier: "京东", zone: "宁波" },
-  { id: "quote-zt-hebei", carrier: "中通", zone: "河北" }
-];
 
 const state = {
   products: [],
@@ -101,12 +94,7 @@ async function loadLibrary() {
       await rowsFromRecord(records.get(slotIds.productPackage)),
       state.productInfo
     );
-    state.quotes = [];
-
-    for (const quoteSlot of quoteSlots) {
-      const rows = await rowsFromRecord(records.get(quoteSlot.id));
-      state.quotes.push(...normalizeQuotes(rows, quoteSlot));
-    }
+    state.quotes = normalizeLogisticsQuoteSheets(await sheetsFromRecord(records.get(slotIds.logisticsQuote)));
 
     renderOriginOptions();
     updateProductInfoFields();
@@ -145,12 +133,26 @@ async function loadAppliedRecords() {
 }
 
 async function rowsFromRecord(record) {
-  const buffer = getRecordBuffer(record);
-  if (!buffer) return [];
-  const workbook = readWorkbook(record.fileName, buffer);
+  const workbook = workbookFromRecord(record);
+  if (!workbook) return [];
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) return [];
   return XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "", raw: false });
+}
+
+async function sheetsFromRecord(record) {
+  const workbook = workbookFromRecord(record);
+  if (!workbook) return [];
+  return workbook.SheetNames.map((sheetName) => ({
+    sheetName,
+    rows: XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "", raw: false })
+  }));
+}
+
+function workbookFromRecord(record) {
+  const buffer = getRecordBuffer(record);
+  if (!buffer) return null;
+  return readWorkbook(record.fileName, buffer);
 }
 
 function getRecordBuffer(record) {
@@ -222,6 +224,7 @@ function normalizeProducts(packageRows, infoItems = []) {
     const singleChargeWeight = roundWeight(packages.reduce((sum, item) => sum + item.chargeWeight, 0));
     const packageCountFromRow = parseNumber(pick(row, ["件数", "包裹件数", "包裹数量", "单件包裹数", "包装件数"]));
     const totalActualWeightFromRow = parseNumber(pick(row, ["总实际重量", "总实际重量kg", "实际总重量", "实际总重量kg", "总重量", "总重量kg"]));
+    const totalVolume = parseNumber(pick(row, ["总体积", "总体积cm3", "总体积cm³", "总体积立方厘米", "总立方厘米", "总方量", "体积"]));
     return {
       model,
       materialCode,
@@ -234,6 +237,7 @@ function normalizeProducts(packageRows, infoItems = []) {
       singleWeight,
       singleChargeWeight,
       totalActualWeight: totalActualWeightFromRow,
+      totalVolume,
       raw: row
     };
   }).filter(Boolean);
@@ -321,32 +325,94 @@ function parsePackages(row) {
   return packages;
 }
 
-function normalizeQuotes(rows, slot) {
-  return rows.map((row) => {
+function normalizeLogisticsQuoteSheets(sheets) {
+  return sheets.flatMap((sheet) => {
+    const sheetMeta = parseQuoteSheetName(sheet.sheetName);
+    if (!sheetMeta) return [];
+    return sheet.rows.map((row) => normalizeLogisticsQuoteRow(row, sheetMeta, sheet.sheetName)).filter(Boolean);
+  });
+}
+
+function parseQuoteSheetName(sheetName) {
+  const text = clean(sheetName);
+  const match = text.match(/^(.+?)[-－—](.+)$/);
+  if (!match) return null;
+  return {
+    originName: clean(match[1]),
+    carrier: clean(match[2])
+  };
+}
+
+function normalizeLogisticsQuoteRow(row, sheetMeta, sheetName) {
     const canShipText = clean(pick(row, ["是否可发", "可发", "是否可送", "是否配送"]));
-    const firstFee = parseNumber(pick(row, ["首重费用", "首重价格", "首重费", "首费"]));
-    const stepFee = parseNumber(pick(row, ["续重费用", "续重价格", "续重费"]));
-    const unitPrice = parseNumber(pick(row, ["单价", "每公斤", "元/kg", "公斤单价", "每kg费用"]));
-    if (!firstFee && !stepFee && !unitPrice) return null;
+    const priceRule = parseWeightPriceRule(row);
+    if (!priceRule) return null;
     return {
-      slotId: slot.id,
-      carrier: slot.carrier,
-      quoteZone: slot.zone,
+      slotId: slotIds.logisticsQuote,
+      sheetName,
+      originName: sheetMeta.originName,
+      carrier: sheetMeta.carrier,
+      quoteZone: sheetMeta.originName,
       province: clean(pick(row, ["目的省", "省", "省份", "收货省"])),
       city: clean(pick(row, ["目的市", "市", "城市", "收货市"])),
       district: clean(pick(row, ["目的区", "区", "区县", "目的区县", "收货区县"])),
-      firstWeight: parseNumber(pick(row, ["首重kg", "首重", "首重重量"])) || 1,
-      firstFee,
-      stepWeight: parseNumber(pick(row, ["续重kg", "续重", "续重单位", "计费单位"])) || 1,
-      stepFee,
-      unitPrice,
+      bubbleRatio: parseNumber(pick(row, ["泡比", "抛比", "体积泡比", "材积系数"])),
+      firstWeight: priceRule.firstWeight,
+      firstFee: priceRule.firstFee,
+      steps: priceRule.steps,
       minFee: parseNumber(pick(row, ["最低收费", "最低费用", "起步价", "保底费用"])),
       canShip: !["否", "不可发", "不可送", "停发", "禁发", "no", "false"].includes(normalizeText(canShipText)),
       limit: clean(pick(row, ["限制说明", "限制", "不可发原因"])),
       remark: clean(pick(row, ["备注", "说明"])),
       raw: row
     };
-  }).filter(Boolean);
+}
+
+function parseWeightPriceRule(row) {
+  const rule = {
+    firstWeight: 0,
+    firstFee: 0,
+    steps: []
+  };
+  for (const [header, value] of Object.entries(row || {})) {
+    const fee = parseNumber(value);
+    if (!fee) continue;
+    const text = normalizeHeaderText(header);
+    const firstMatch = text.match(/^首重[（(]\s*(\d+(?:\.\d+)?)\s*kg\s*[）)]$/i);
+    if (firstMatch) {
+      rule.firstWeight = Number(firstMatch[1]);
+      rule.firstFee = fee;
+      continue;
+    }
+    const rangeMatch = text.match(/^续重[（(]\s*(\d+(?:\.\d+)?)\s*[-~至]\s*(\d+(?:\.\d+)?)\s*kg\s*[）)]$/i);
+    if (rangeMatch) {
+      rule.steps.push({
+        from: Number(rangeMatch[1]),
+        to: Number(rangeMatch[2]),
+        fee
+      });
+      continue;
+    }
+    const aboveMatch = text.match(/^续重[（(]\s*(\d+(?:\.\d+)?)\s*kg\s*以上\s*[）)]$/i);
+    if (aboveMatch) {
+      rule.steps.push({
+        from: Number(aboveMatch[1]),
+        to: Number.POSITIVE_INFINITY,
+        fee
+      });
+    }
+  }
+  rule.steps.sort((a, b) => a.from - b.from);
+  if (!rule.firstWeight || !rule.firstFee) return null;
+  return rule;
+}
+
+function normalizeHeaderText(value) {
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .replace(/ＫＧ/gi, "kg")
+    .replace(/公斤/g, "kg")
+    .trim();
 }
 
 function renderOriginOptions() {
@@ -591,7 +657,6 @@ function calculateBestOption(input) {
   const origin = findOrigin(originName);
   const match = findProductMatch({ materialCode });
   const product = match.product;
-  const quoteZone = origin?.quoteZone || normalizeQuoteZone(originName);
   const addressCheck = validateCustomerAddress(address);
 
   if (!originName) {
@@ -615,23 +680,22 @@ function calculateBestOption(input) {
   if (match.error) {
     return buildResult(input, origin, product, null, [], match.error);
   }
-  if (!product.packageCount || !product.singleChargeWeight) {
-    return buildResult(input, origin, product, null, [], "该物料缺少有效包裹重量或计费重量。");
-  }
-  if (!quoteZone) {
-    return buildResult(input, origin, product, null, [], "发货地址缺少报价区域，且无法从发货地识别河北/宁波。");
+  if (!product.packageCount || (!product.totalVolume && !product.singleChargeWeight)) {
+    return buildResult(input, origin, product, null, [], "该物料缺少总体积或有效包裹计费重量。");
   }
 
-  const totalChargeWeight = roundWeight(product.singleChargeWeight * purchaseQty);
   const candidates = state.quotes
-    .filter((quote) => sameText(quote.quoteZone, quoteZone))
+    .filter((quote) => matchesQuoteOrigin(quote, originName))
     .filter((quote) => quote.canShip)
     .map((quote) => {
       const addressMatch = matchAddress(quote, address);
       if (!addressMatch.matched) return null;
+      const totalChargeWeight = calculateLogisticsChargeWeight(product, purchaseQty, quote);
+      if (!Number.isFinite(totalChargeWeight) || totalChargeWeight <= 0) return null;
       return {
         quote,
         match: addressMatch,
+        totalChargeWeight,
         cost: calculateCost(quote, totalChargeWeight)
       };
     })
@@ -648,6 +712,12 @@ function calculateBestOption(input) {
 
 function findOrigin(originName) {
   return state.origins.find((item) => sameText(item.name, originName)) || null;
+}
+
+function matchesQuoteOrigin(quote, originName) {
+  const quoteOrigin = normalizeText(quote.originName);
+  const origin = normalizeText(originName);
+  return quoteOrigin === origin || quoteOrigin.includes(origin) || origin.includes(quoteOrigin);
 }
 
 function validateCustomerAddress(address) {
@@ -769,17 +839,25 @@ function matchAddress(quote, address) {
   return { matched: true, score, label: labels.join(" / ") };
 }
 
+function calculateLogisticsChargeWeight(product, purchaseQty, quote) {
+  if (product?.totalVolume && quote?.bubbleRatio) {
+    return roundWeight(product.totalVolume * purchaseQty / quote.bubbleRatio);
+  }
+  return roundWeight((product?.singleChargeWeight || 0) * purchaseQty);
+}
+
 function calculateCost(quote, weight) {
-  const firstWeight = quote.firstWeight || 1;
-  const stepWeight = quote.stepWeight || 1;
-  let cost = 0;
-  if (quote.firstFee || quote.stepFee) {
-    const extraWeight = Math.max(0, weight - firstWeight);
-    cost = (quote.firstFee || 0) + Math.ceil(extraWeight / stepWeight) * (quote.stepFee || 0);
-  } else if (quote.unitPrice) {
-    cost = weight * quote.unitPrice;
-  } else {
-    return Number.NaN;
+  if (!quote?.firstWeight || !quote?.firstFee) return Number.NaN;
+  let cost = quote.firstFee;
+  if (weight > quote.firstWeight) {
+    const sortedSteps = [...(quote.steps || [])].sort((a, b) => a.from - b.from);
+    for (const step of sortedSteps) {
+      const from = Math.max(step.from, quote.firstWeight);
+      const to = Number.isFinite(step.to) ? step.to : weight;
+      const billable = Math.max(0, Math.min(weight, to) - from);
+      if (billable > 0) cost += billable * step.fee;
+      if (weight <= to) break;
+    }
   }
   if (quote.minFee) cost = Math.max(cost, quote.minFee);
   return roundMoney(cost);
@@ -790,8 +868,8 @@ function buildResult(input, origin, product, best, candidates, message) {
   const singleWeight = product?.singleWeight || 0;
   const singleChargeWeight = product?.singleChargeWeight || 0;
   const totalActualWeight = product?.totalActualWeight || (product ? roundWeight(singleWeight * purchaseQty) : 0);
-  const totalChargeWeight = product ? roundWeight(singleChargeWeight * purchaseQty) : 0;
   const quote = best?.quote || {};
+  const totalChargeWeight = best?.totalChargeWeight || 0;
   const alternatives = best
     ? candidates.filter((item) => item !== best)
     : candidates;

@@ -35,7 +35,7 @@ const slots = [
     expectedName: "物流公司报价.xlsx",
     description: "物流公司报价表维护槽位，用于查询页读取物流报价。",
     template: "quote",
-    keywords: ["目的省", "目的市", "首重kg", "续重费用", "是否可发"]
+    keywords: ["目的省", "目的市", "泡比", "首重", "续重", "是否可发"]
   },
   {
     id: "quote-jd-hebei",
@@ -766,16 +766,16 @@ function downloadSlotTemplate(type) {
     },
     quote: {
       fileName: "物流报价模板.xlsx",
-      sheetName: "物流报价",
+      sheetName: "示例发货地-示例物流",
       rows: [
         {
           目的省: "浙江省",
           目的市: "杭州市",
           目的区: "",
-          首重kg: 1,
-          首重费用: 8,
-          续重kg: 1,
-          续重费用: 2,
+          泡比: 6000,
+          "首重（15KG）": 29,
+          "续重（15-60KG）": 2,
+          "续重（60KG以上）": 1.5,
           最低收费: 8,
           是否可发: "是",
           限制说明: "",
