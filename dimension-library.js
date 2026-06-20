@@ -10,6 +10,12 @@ const slots = [
     template: "origin"
   },
   {
+    id: "dim-product-info",
+    name: "商品信息表",
+    description: "商品基础信息维护槽位，当前用于资料维护，费用计算仍以商品包装明细为准。",
+    template: "product"
+  },
+  {
     id: "dim-product-package",
     name: "商品包装明细",
     description: "型号、商品名称、包裹1到包裹6的尺寸、重量和计费重量。",
@@ -44,12 +50,6 @@ const slots = [
     name: "中通-河北报价",
     description: "河北发货地使用的中通报价表。",
     template: "quote"
-  },
-  {
-    id: "dim-reserved",
-    name: "备用维度",
-    description: "备用槽位，后续按业务规则扩展，当前不参与查询计算。",
-    template: ""
   }
 ];
 
@@ -279,6 +279,20 @@ function downloadSlotTemplate(type) {
           详细地址: "浙江省宁波市示例区示例路2号",
           联系人: "李四",
           联系电话: "13900000000",
+          备注: ""
+        }
+      ]
+    },
+    product: {
+      fileName: "商品信息表模板.xlsx",
+      sheetName: "商品信息表",
+      rows: [
+        {
+          型号: "A100",
+          商品名称: "示例商品",
+          商品分类: "示例分类",
+          品牌: "",
+          单位: "件",
           备注: ""
         }
       ]
