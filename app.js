@@ -966,7 +966,7 @@ function buildCalculationDetail({ item, isBest, product, purchaseQty, totalVolum
 
 function renderResults() {
   if (!state.results.length) {
-    els.resultBody.innerHTML = `<tr><td colspan="14" class="empty">暂无查询结果</td></tr>`;
+    els.resultBody.innerHTML = `<tr><td colspan="15" class="empty">暂无查询结果</td></tr>`;
     els.exportResults.disabled = true;
     return;
   }
@@ -981,6 +981,7 @@ function renderResults() {
       <td>${escapeHtml(row.packageCount)}</td>
       <td>${escapeHtml(row.totalActualWeight)}</td>
       <td>${escapeHtml(row.totalChargeWeight)}</td>
+      <td>${escapeHtml(row.origin)}</td>
       <td>${escapeHtml(row.carrier || "未匹配")}</td>
       <td>${row.cost === "" ? "未匹配" : escapeHtml(row.cost)}</td>
       <td>${escapeHtml(row.backupCarriers)}</td>
@@ -1275,6 +1276,7 @@ function exportResults() {
     单件包裹数: row.packageCount,
     总实际重量: row.totalActualWeight,
     总推荐物流计费重量: row.totalChargeWeight,
+    发货地: row.origin,
     推荐物流: row.carrier,
     预估费用: row.cost,
     备选物流: row.backupCarriers,
