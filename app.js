@@ -188,7 +188,8 @@ function normalizeProducts(packageRows, infoRows = []) {
     const packageIdentity = normalizeProductIdentity(row);
     const info = findProductInfo(packageIdentity, infoItems);
     const model = packageIdentity.model || info?.model || "";
-    const materialCode = packageIdentity.materialCode || info?.materialCode || "";
+    const materialCodes = packageIdentity.materialCodes;
+    const materialCode = materialCodes[0] || packageIdentity.materialCode || "";
     const salesSeries = packageIdentity.salesSeries || info?.salesSeries || "";
     if (!model && !materialCode && !salesSeries) return null;
     const packages = parsePackages(row);
@@ -200,7 +201,8 @@ function normalizeProducts(packageRows, infoRows = []) {
       salesSeries,
       name: packageIdentity.name || info?.name || "",
       packages,
-      packageCount: packages.length,
+      materialCodes,
+      packageCount: materialCodes.length || packages.length,
       singleWeight,
       singleChargeWeight,
       raw: row
@@ -209,12 +211,37 @@ function normalizeProducts(packageRows, infoRows = []) {
 }
 
 function normalizeProductIdentity(row) {
+  const materialCodes = collectMaterialCodes(row);
   return {
     model: clean(pick(row, ["销售型号", "型号", "商品型号", "产品型号", "SKU", "sku", "model"])),
-    materialCode: clean(pick(row, ["物料编码", "物料代码", "商品编码", "产品编码", "存货编码"])),
+    materialCode: materialCodes[0] || clean(pick(row, ["物料编码", "物料代码", "商品编码", "产品编码", "存货编码"])),
+    materialCodes,
     salesSeries: clean(pick(row, ["销售系列", "系列", "产品系列", "商品系列"])),
     name: clean(pick(row, ["商品名称", "品名", "产品名称", "物料名称"]))
   };
+}
+
+function collectMaterialCodes(row) {
+  const values = [];
+  for (const [key, value] of Object.entries(row || {})) {
+    if (!isMaterialCodeHeader(key)) continue;
+    for (const code of splitMaterialCodes(value)) {
+      if (!values.some((item) => sameText(item, code))) values.push(code);
+    }
+  }
+  return values;
+}
+
+function isMaterialCodeHeader(key) {
+  const header = normalizeHeader(key);
+  return ["物料编码", "物料代码", "商品编码", "产品编码", "存货编码"].some((name) => header.includes(normalizeHeader(name)));
+}
+
+function splitMaterialCodes(value) {
+  return clean(value)
+    .split(/[、,，;；\/|｜\s]+/)
+    .map((item) => clean(item))
+    .filter(Boolean);
 }
 
 function findProductInfo(packageIdentity, infoItems) {
@@ -296,7 +323,7 @@ function renderOriginOptions() {
 
 function renderProductOptions() {
   fillDatalist(els.modelList, state.products.map((item) => item.model).filter(Boolean));
-  fillDatalist(els.materialCodeList, state.products.map((item) => item.materialCode).filter(Boolean));
+  fillDatalist(els.materialCodeList, state.products.flatMap((item) => item.materialCodes?.length ? item.materialCodes : [item.materialCode]).filter(Boolean));
   fillDatalist(els.salesSeriesList, state.products.map((item) => item.salesSeries).filter(Boolean));
 }
 
@@ -401,7 +428,7 @@ function findOrigin(originName) {
 function findProductMatch({ model, materialCode, salesSeries }) {
   let matches = state.products;
   if (model) matches = matches.filter((item) => sameText(item.model, model));
-  if (materialCode) matches = matches.filter((item) => sameText(item.materialCode, materialCode));
+  if (materialCode) matches = matches.filter((item) => (item.materialCodes || [item.materialCode]).some((code) => sameText(code, materialCode)));
   if (salesSeries) matches = matches.filter((item) => sameText(item.salesSeries, salesSeries));
   if (!matches.length) return { product: null, error: "商品包装明细中未找到匹配的物料。" };
   if (matches.length > 1) return { product: null, error: "匹配到多个物料，请补充型号或物料编码。" };

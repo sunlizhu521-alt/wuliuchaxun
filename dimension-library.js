@@ -350,6 +350,7 @@ function buildPackageTemplateRow() {
   const row = {
     型号: "A100",
     物料编码: "MAT-A100",
+    物料编码2: "",
     销售系列: "示例系列",
     商品名称: "示例商品",
     备注: ""
