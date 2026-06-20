@@ -32,6 +32,7 @@ const els = {
   addressInput: document.getElementById("addressInput"),
   modelInput: document.getElementById("modelInput"),
   materialCodeInput: document.getElementById("materialCodeInput"),
+  salesProductLineInput: document.getElementById("salesProductLineInput"),
   salesSeriesInput: document.getElementById("salesSeriesInput"),
   quantityInput: document.getElementById("quantityInput"),
   runQuery: document.getElementById("runQuery"),
@@ -207,14 +208,16 @@ function normalizeProducts(packageRows, infoItems = []) {
     const model = info?.model || packageIdentity.model || "";
     const materialCodes = packageIdentity.materialCodes;
     const materialCode = materialCodes[0] || packageIdentity.materialCode || "";
+    const salesProductLine = info?.salesProductLine || packageIdentity.salesProductLine || "";
     const salesSeries = info?.salesSeries || packageIdentity.salesSeries || "";
-    if (!model && !materialCode && !salesSeries) return null;
+    if (!model && !materialCode && !salesProductLine && !salesSeries) return null;
     const packages = parsePackages(row);
     const singleWeight = roundWeight(packages.reduce((sum, item) => sum + (item.weight || item.chargeWeight || 0), 0));
     const singleChargeWeight = roundWeight(packages.reduce((sum, item) => sum + item.chargeWeight, 0));
     return {
       model,
       materialCode,
+      salesProductLine,
       salesSeries,
       name: info?.name || packageIdentity.name || "",
       packages,
@@ -233,6 +236,7 @@ function normalizeProductIdentity(row) {
     model: clean(pick(row, ["销售型号", "型号", "商品型号", "产品型号", "SKU", "sku", "model"])),
     materialCode: materialCodes[0] || clean(pick(row, ["物料编码", "物料代码", "商品编码", "产品编码", "存货编码"])),
     materialCodes,
+    salesProductLine: clean(pick(row, ["销售产品线", "产品线", "一级产品线", "销售线"])),
     salesSeries: clean(pick(row, ["销售系列", "系列", "产品系列", "商品系列"])),
     name: clean(pick(row, ["商品名称", "品名", "产品名称", "物料名称"]))
   };
@@ -419,6 +423,7 @@ function buildManualCustomerAddress() {
 
 function updateProductInfoFields() {
   const info = findProductInfoByMaterialCode(els.materialCodeInput.value);
+  els.salesProductLineInput.value = info?.salesProductLine || "";
   els.salesSeriesInput.value = info?.salesSeries || "";
   els.modelInput.value = info?.model || "";
   return info;
@@ -433,6 +438,7 @@ function runSingleQuery() {
     addressError: addressData.error,
     model: productInfo?.model || els.modelInput.value.trim(),
     materialCode: els.materialCodeInput.value.trim(),
+    salesProductLine: productInfo?.salesProductLine || els.salesProductLineInput.value.trim(),
     salesSeries: productInfo?.salesSeries || els.salesSeriesInput.value.trim(),
     purchaseQty: parsePurchaseQty(els.quantityInput.value)
   });
@@ -680,6 +686,7 @@ function buildResult(input, origin, product, best, candidates, message) {
     address: clean(input.address),
     model: product?.model || clean(input.model),
     materialCode: product?.materialCode || clean(input.materialCode),
+    salesProductLine: product?.salesProductLine || clean(input.salesProductLine),
     salesSeries: product?.salesSeries || clean(input.salesSeries),
     productName: product?.name || "",
     purchaseQty,

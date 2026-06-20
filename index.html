@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>物流查询系统</title>
-  <link rel="stylesheet" href="styles.css?v=20260632">
+  <link rel="stylesheet" href="styles.css?v=20260634">
 </head>
 <body>
   <div class="app-shell">
@@ -26,7 +26,7 @@
       <header class="page-header">
         <div>
           <h1>物流查询</h1>
-          <p>选择发货地，输入顾客地址和物料编码，销售系列与型号由商品信息表自动带出。</p>
+          <p>选择发货地，输入顾客地址和物料编码，销售产品线、销售系列与型号由商品信息表自动带出。</p>
         </div>
         <div class="header-actions">
           <button class="button" id="reloadLibrary">刷新维度</button>
@@ -62,6 +62,10 @@
         <label class="field">
           <span>物料编码（必填）</span>
           <input id="materialCodeInput" type="text" placeholder="输入物料编码" autocomplete="off" required>
+        </label>
+        <label class="field">
+          <span>销售产品线</span>
+          <input id="salesProductLineInput" type="text" placeholder="根据物料编码自动带出" readonly>
         </label>
         <label class="field">
           <span>销售系列</span>
@@ -115,7 +119,7 @@
         <div class="panel-header">
           <div>
             <h2>批量导入查询</h2>
-            <p>支持拖拽 Excel/CSV，字段为：发货地、顾客地址、物料编码（必填）、购买件数；销售系列和型号由商品信息表带出。</p>
+            <p>支持拖拽 Excel/CSV，字段为：发货地、顾客地址、物料编码（必填）、购买件数；销售产品线、销售系列和型号由商品信息表带出。</p>
           </div>
           <button class="button" id="downloadTemplate">下载导入模板</button>
         </div>
@@ -131,6 +135,6 @@
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="shared-library.js?v=20260623"></script>
   <script src="china-regions.js?v=20260632"></script>
-  <script src="app.js?v=20260632"></script>
+  <script src="app.js?v=20260634"></script>
 </body>
 </html>

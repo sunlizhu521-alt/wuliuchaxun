@@ -17,9 +17,9 @@ const slots = [
     id: "dim-product-info",
     name: "商品信息表",
     expectedName: "商品信息表.xlsx",
-    description: "商品基础信息维护槽位，包含物料编码、销售系列、型号、商品名称等字段。",
+    description: "商品基础信息维护槽位，包含物料编码、销售产品线、销售系列、型号、商品名称等字段。",
     template: "product",
-    keywords: ["物料编码", "销售系列", "型号", "商品名称"]
+    keywords: ["物料编码", "销售产品线", "销售系列", "型号", "商品名称"]
   },
   {
     id: "dim-product-package",
@@ -748,6 +748,7 @@ function downloadSlotTemplate(type) {
       rows: [
         {
           物料编码: "MAT-A100",
+          销售产品线: "示例产品线",
           销售系列: "示例系列",
           型号: "A100",
           商品名称: "示例商品",
