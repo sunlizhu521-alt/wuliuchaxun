@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>物流查询系统</title>
+  <link rel="stylesheet" href="styles.css?v=20260621">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">物</span>
+        <div>
+          <strong>物流查询系统</strong>
+          <small>费用最优判断</small>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="active" href="index.html">物流查询</a>
+        <a href="dimension-library.html">维度表库</a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="page-header">
+        <div>
+          <h1>物流查询</h1>
+          <p>选择发货地，输入顾客地址、型号和商品购买件数，自动推荐费用最低的物流方案。</p>
+        </div>
+        <div class="header-actions">
+          <button class="button" id="reloadLibrary">刷新维度</button>
+          <a class="button ghost" href="dimension-library.html">维护维度表</a>
+        </div>
+      </header>
+
+      <section class="toolbar query-toolbar">
+        <label class="field">
+          <span>发货地</span>
+          <select id="originSelect"></select>
+        </label>
+        <label class="field wide">
+          <span>顾客地址</span>
+          <input id="addressInput" type="text" placeholder="输入省市区和详细地址">
+        </label>
+        <label class="field">
+          <span>型号</span>
+          <input id="modelInput" type="text" list="modelList" placeholder="输入或选择型号">
+          <datalist id="modelList"></datalist>
+        </label>
+        <label class="field short">
+          <span>商品购买件数</span>
+          <input id="quantityInput" type="number" min="1" step="1" value="1">
+        </label>
+        <button class="button primary" id="runQuery">查询最优物流</button>
+      </section>
+
+      <section class="metrics">
+        <div class="metric-card">
+          <span>核心维度状态</span>
+          <strong id="libraryStatus">加载中</strong>
+        </div>
+        <div class="metric-card">
+          <span>可选型号</span>
+          <strong id="productCount">0</strong>
+        </div>
+        <div class="metric-card">
+          <span>报价线路</span>
+          <strong id="quoteCount">0</strong>
+        </div>
+        <div class="metric-card">
+          <span>发货地</span>
+          <strong id="originCount">0</strong>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>最优结果</h2>
+            <p id="resultHint">请输入查询条件。</p>
+          </div>
+          <button class="button" id="exportResults" disabled>导出结果</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>发货地</th>
+                <th>报价区域</th>
+                <th>顾客地址</th>
+                <th>型号</th>
+                <th>商品购买件数</th>
+                <th>包裹数</th>
+                <th>单件计费重量</th>
+                <th>总计费重量</th>
+                <th>推荐物流</th>
+                <th>预估费用</th>
+                <th>匹配区域</th>
+                <th>备选数量</th>
+                <th>失败原因/说明</th>
+              </tr>
+            </thead>
+            <tbody id="resultBody">
+              <tr><td colspan="13" class="empty">暂无查询结果</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>批量导入查询</h2>
+            <p>支持拖拽 Excel/CSV，字段为：发货地、顾客地址、型号、商品购买件数。</p>
+          </div>
+          <button class="button" id="downloadTemplate">下载导入模板</button>
+        </div>
+        <div class="drop-zone" id="dropZone">
+          <input id="batchFile" type="file" accept=".xlsx,.xls,.csv" hidden>
+          <strong>拖拽表格到这里</strong>
+          <span>或点击选择文件导入地址查询清单</span>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="shared-library.js?v=20260621"></script>
+  <script src="app.js?v=20260621"></script>
+</body>
+</html>

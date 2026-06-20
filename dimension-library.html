@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>维度表库 - 物流查询系统</title>
+  <link rel="stylesheet" href="styles.css?v=20260621">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">物</span>
+        <div>
+          <strong>物流查询系统</strong>
+          <small>维度数据维护</small>
+        </div>
+      </div>
+      <nav class="nav">
+        <a href="index.html">物流查询</a>
+        <a class="active" href="dimension-library.html">维度表库</a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="page-header">
+        <div>
+          <h1>维度表库</h1>
+          <p>8 个固定槽位。上传后点击应用刷新，查询页读取当前浏览器已应用的维度表。</p>
+        </div>
+        <div class="header-actions">
+          <button class="button primary" id="applyAll">一键全部应用刷新</button>
+          <a class="button ghost" href="index.html">返回查询</a>
+        </div>
+      </header>
+
+      <section class="notice">
+        GitHub Pages 默认只发布页面框架和空共享包，不提交业务 Excel 数据。每位使用者在自己的浏览器中上传最新维度表。
+      </section>
+
+      <section class="slot-grid" id="slotGrid"></section>
+    </main>
+  </div>
+
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="shared-library.js?v=20260621"></script>
+  <script src="dimension-library.js?v=20260621"></script>
+</body>
+</html>
