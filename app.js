@@ -117,7 +117,7 @@ async function loadAppliedRecords() {
     const tx = db.transaction(STORE_NAME, "readonly");
     const request = tx.objectStore(STORE_NAME).getAll();
     request.onsuccess = () => {
-      const applied = request.result.filter((record) => record.applied && record.fileBuffer);
+      const applied = request.result.filter((record) => record.applied && (record.fileData || record.fileBuffer));
       resolve(new Map(applied.map((record) => [record.slotId, record])));
     };
     request.onerror = () => reject(request.error);
@@ -125,11 +125,27 @@ async function loadAppliedRecords() {
 }
 
 async function rowsFromRecord(record) {
-  if (!record?.fileBuffer) return [];
-  const workbook = readWorkbook(record.fileName, record.fileBuffer);
+  const buffer = getRecordBuffer(record);
+  if (!buffer) return [];
+  const workbook = readWorkbook(record.fileName, buffer);
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) return [];
   return XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "", raw: false });
+}
+
+function getRecordBuffer(record) {
+  if (!record) return null;
+  if (record.fileData) return base64ToArrayBuffer(record.fileData);
+  return record.fileBuffer || null;
+}
+
+function base64ToArrayBuffer(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
 }
 
 function readWorkbook(fileName, buffer) {

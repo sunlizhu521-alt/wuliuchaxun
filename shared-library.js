@@ -2,7 +2,7 @@
   const DB_NAME = "logistics-query-dimension-library";
   const DB_VERSION = 1;
   const STORE_NAME = "dimension-files";
-  const SHARED_URL = "data/shared-library.json?v=20260621";
+  const SHARED_URL = "data/shared-library.json?v=20260622";
 
   function openDB() {
     return new Promise((resolve, reject) => {

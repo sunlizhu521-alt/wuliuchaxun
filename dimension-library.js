@@ -60,10 +60,15 @@ let records = new Map();
 init();
 
 async function init() {
-  await window.LogisticsSharedLibrary?.importSharedLibrary?.();
-  records = await loadRecords();
-  render();
-  applyAllButton.addEventListener("click", applyAllSlots);
+  try {
+    await window.LogisticsSharedLibrary?.importSharedLibrary?.();
+    records = await loadRecords();
+    render();
+    applyAllButton.addEventListener("click", applyAllSlots);
+  } catch (error) {
+    console.error(error);
+    toast(error.message || "维度表库初始化失败");
+  }
 }
 
 function openDB() {
@@ -119,6 +124,11 @@ function render() {
       event.target.value = "";
     });
   });
+  grid.querySelectorAll("[data-choose]").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.querySelector(`[data-file="${button.dataset.choose}"]`)?.click();
+    });
+  });
   grid.querySelectorAll("[data-apply]").forEach((button) => {
     button.addEventListener("click", () => applySlot(button.dataset.apply));
   });
@@ -137,33 +147,34 @@ function renderSlot(slot) {
   const fileName = record?.fileName || record?.pendingName || "未上传";
   const savedAt = formatDate(record?.appliedAt || record?.savedAt);
   const sheetNames = record?.sheetNames?.length ? record.sheetNames.join("、") : "待应用后识别";
+  const size = formatFileSize(record?.fileSize || record?.size || 0);
   const templateButton = slot.template
-    ? `<button class="button" data-template="${slot.template}">下载模板</button>`
+    ? `<button class="button" type="button" data-template="${slot.template}">下载模板</button>`
     : "";
 
   return `
-    <article class="slot-card">
-      <div class="slot-title">
-        <h2>${escapeHtml(slot.name)}</h2>
-        <span class="badge ${status.className}">${status.label}</span>
+    <article class="library-card file-slot" data-drop="${slot.id}" data-slot-id="${slot.id}">
+      <div class="slot-head">
+        <span class="slot-kicker">DIMENSION SLOT</span>
+        <span class="slot-state ${status.className}">${status.label}</span>
       </div>
-      <p>${escapeHtml(slot.description)}</p>
-      <div class="slot-drop" data-drop="${slot.id}">
-        <span>拖拽 Excel/CSV 到此槽位，或点击替换文件</span>
-        <input type="file" accept=".xlsx,.xls,.csv" data-file="${slot.id}" hidden>
+      <h2>${escapeHtml(slot.name)}</h2>
+      <p class="slot-description">${escapeHtml(slot.description)}</p>
+      <h3>${escapeHtml(fileName)}</h3>
+      <p class="file-kind">Excel / CSV · ${size}</p>
+      <div class="slot-info">
+        <span>工作表</span>
+        <strong>${escapeHtml(sheetNames)}</strong>
       </div>
-      <div class="slot-meta">
-        <span>文件：${escapeHtml(fileName)}</span>
-        <span>工作表：${escapeHtml(sheetNames)}</span>
-        <span>更新时间：${savedAt}</span>
+      <div class="slot-info">
+        <span>更新时间</span>
+        <strong>${savedAt}</strong>
       </div>
-      <div class="slot-actions">
-        <label class="button">
-          替换文件
-          <input type="file" accept=".xlsx,.xls,.csv" data-file="${slot.id}" hidden>
-        </label>
-        <button class="button primary" data-apply="${slot.id}" ${record?.pendingFile || record?.fileBuffer ? "" : "disabled"}>应用刷新</button>
-        <button class="button" data-delete="${slot.id}" ${record ? "" : "disabled"}>删除</button>
+      <input class="slot-file-input" type="file" accept=".xlsx,.xlsm,.xls,.csv" data-file="${slot.id}">
+      <div class="slot-actions card-actions">
+        <button class="button" type="button" data-choose="${slot.id}">替换文件</button>
+        <button class="button primary" type="button" data-apply="${slot.id}" ${record?.pendingFile || record?.fileData || record?.fileBuffer ? "" : "disabled"}>应用刷新</button>
+        <button class="button" type="button" data-delete="${slot.id}" ${record ? "" : "disabled"}>删除</button>
         ${templateButton}
       </div>
     </article>
@@ -171,23 +182,21 @@ function renderSlot(slot) {
 }
 
 function getStatus(record) {
-  if (!record) return { label: "缺失", className: "missing" };
+  if (!record) return { label: "缺失", className: "empty" };
   if (record.pendingFile) return { label: "待应用", className: "pending" };
   if (record.applied) return { label: "已应用", className: "applied" };
   return { label: "待应用", className: "pending" };
 }
 
 function bindDropZone(drop, slotId) {
-  const input = drop.querySelector("input");
-  drop.addEventListener("click", () => input.click());
   drop.addEventListener("dragover", (event) => {
     event.preventDefault();
-    drop.classList.add("dragging");
+    drop.classList.add("is-drag-over");
   });
-  drop.addEventListener("dragleave", () => drop.classList.remove("dragging"));
+  drop.addEventListener("dragleave", () => drop.classList.remove("is-drag-over"));
   drop.addEventListener("drop", (event) => {
     event.preventDefault();
-    drop.classList.remove("dragging");
+    drop.classList.remove("is-drag-over");
     const file = event.dataTransfer.files?.[0];
     if (file) savePendingFile(slotId, file);
   });
@@ -195,6 +204,10 @@ function bindDropZone(drop, slotId) {
 
 async function savePendingFile(slotId, file) {
   try {
+    if (!isAcceptedFile(file)) {
+      toast("请上传 .xlsx、.xlsm、.xls 或 .csv 文件。");
+      return;
+    }
     const buffer = await file.arrayBuffer();
     const workbook = readWorkbook(file.name, buffer);
     const previous = records.get(slotId) || {};
@@ -206,11 +219,12 @@ async function savePendingFile(slotId, file) {
       fileName: previous.fileName || file.name,
       fileSize: file.size,
       fileType: file.type || inferFileType(file.name),
-      fileBuffer: buffer,
+      fileData: arrayBufferToBase64(buffer),
       sheetNames: workbook.SheetNames,
       savedAt: new Date().toISOString(),
       sharedSavedAt: ""
     };
+    delete record.fileBuffer;
     records.set(slotId, record);
     await saveRecord(record);
     render();
@@ -223,7 +237,7 @@ async function savePendingFile(slotId, file) {
 
 async function applySlot(slotId) {
   const record = records.get(slotId);
-  if (!record?.fileBuffer) return;
+  if (!record?.fileData && !record?.fileBuffer) return;
   const applied = {
     ...record,
     pendingFile: false,
@@ -239,7 +253,7 @@ async function applySlot(slotId) {
 }
 
 async function applyAllSlots() {
-  const targets = [...records.values()].filter((record) => record.pendingFile || record.fileBuffer);
+  const targets = [...records.values()].filter((record) => record.pendingFile || record.fileData || record.fileBuffer);
   for (const record of targets) {
     await applySlot(record.slotId);
   }
@@ -355,15 +369,36 @@ function readWorkbook(fileName, buffer) {
   return XLSX.read(buffer, { type: "array", cellDates: true });
 }
 
+function isAcceptedFile(file) {
+  return /\.(xlsx|xlsm|xls|csv)$/i.test(file?.name || "");
+}
+
 function inferFileType(name) {
   if (/\.csv$/i.test(name)) return "text/csv";
   if (/\.xlsx$/i.test(name)) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   return "application/vnd.ms-excel";
 }
 
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
 function formatDate(value) {
   if (!value) return "无";
   return new Date(value).toLocaleString("zh-CN", { hour12: false });
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return "0 KB";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function escapeHtml(value) {
