@@ -18,6 +18,7 @@ const quoteSlots = [
 
 const state = {
   products: [],
+  productInfo: [],
   quotes: [],
   origins: [],
   results: []
@@ -30,9 +31,6 @@ const els = {
   materialCodeInput: document.getElementById("materialCodeInput"),
   salesSeriesInput: document.getElementById("salesSeriesInput"),
   quantityInput: document.getElementById("quantityInput"),
-  modelList: document.getElementById("modelList"),
-  materialCodeList: document.getElementById("materialCodeList"),
-  salesSeriesList: document.getElementById("salesSeriesList"),
   runQuery: document.getElementById("runQuery"),
   reloadLibrary: document.getElementById("reloadLibrary"),
   resultBody: document.getElementById("resultBody"),
@@ -53,6 +51,8 @@ async function init() {
 function bindEvents() {
   els.reloadLibrary.addEventListener("click", loadLibrary);
   els.runQuery.addEventListener("click", runSingleQuery);
+  els.materialCodeInput.addEventListener("input", updateProductInfoFields);
+  els.materialCodeInput.addEventListener("change", updateProductInfoFields);
   els.exportResults.addEventListener("click", exportResults);
   els.downloadTemplate.addEventListener("click", downloadBatchTemplate);
   els.dropZone.addEventListener("click", () => els.batchFile.click());
@@ -78,10 +78,12 @@ async function loadLibrary() {
   try {
     await window.LogisticsSharedLibrary?.importSharedLibrary?.();
     const records = await loadAppliedRecords();
+    const productInfoRows = await rowsFromRecord(records.get(slotIds.productInfo));
+    state.productInfo = normalizeProductInfo(productInfoRows);
     state.origins = normalizeOrigins(await rowsFromRecord(records.get(slotIds.origin)));
     state.products = normalizeProducts(
       await rowsFromRecord(records.get(slotIds.productPackage)),
-      await rowsFromRecord(records.get(slotIds.productInfo))
+      state.productInfo
     );
     state.quotes = [];
 
@@ -91,7 +93,7 @@ async function loadLibrary() {
     }
 
     renderOriginOptions();
-    renderProductOptions();
+    updateProductInfoFields();
     toast("维度表已刷新。");
   } catch (error) {
     console.error(error);
@@ -182,18 +184,21 @@ function normalizeOrigins(rows) {
     .sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
 }
 
-function normalizeProducts(packageRows, infoRows = []) {
-  const infoItems = infoRows
+function normalizeProductInfo(infoRows = []) {
+  return infoRows
     .map((row) => normalizeProductIdentity(row))
-    .filter((item) => item.model || item.materialCode || item.salesSeries);
+    .filter((item) => item.materialCode)
+    .filter((item, index, list) => list.findIndex((entry) => sameText(entry.materialCode, item.materialCode)) === index);
+}
 
+function normalizeProducts(packageRows, infoItems = []) {
   return packageRows.map((row) => {
     const packageIdentity = normalizeProductIdentity(row);
     const info = findProductInfo(packageIdentity, infoItems);
-    const model = packageIdentity.model || info?.model || "";
+    const model = info?.model || packageIdentity.model || "";
     const materialCodes = packageIdentity.materialCodes;
     const materialCode = materialCodes[0] || packageIdentity.materialCode || "";
-    const salesSeries = packageIdentity.salesSeries || info?.salesSeries || "";
+    const salesSeries = info?.salesSeries || packageIdentity.salesSeries || "";
     if (!model && !materialCode && !salesSeries) return null;
     const packages = parsePackages(row);
     const singleWeight = roundWeight(packages.reduce((sum, item) => sum + (item.weight || item.chargeWeight || 0), 0));
@@ -202,7 +207,7 @@ function normalizeProducts(packageRows, infoRows = []) {
       model,
       materialCode,
       salesSeries,
-      name: packageIdentity.name || info?.name || "",
+      name: info?.name || packageIdentity.name || "",
       packages,
       materialCodes,
       packageCount: materialCodes.length || packages.length,
@@ -250,9 +255,17 @@ function splitMaterialCodes(value) {
 function findProductInfo(packageIdentity, infoItems) {
   if (!infoItems.length) return null;
   return infoItems.find((item) => (
-    (packageIdentity.materialCode && sameText(item.materialCode, packageIdentity.materialCode))
+    (packageIdentity.materialCodes || [packageIdentity.materialCode])
+      .filter(Boolean)
+      .some((code) => sameText(item.materialCode, code))
     || (packageIdentity.model && sameText(item.model, packageIdentity.model))
   )) || null;
+}
+
+function findProductInfoByMaterialCode(materialCode) {
+  const code = clean(materialCode);
+  if (!code) return null;
+  return state.productInfo.find((item) => sameText(item.materialCode, code)) || null;
 }
 
 function parsePackages(row) {
@@ -324,24 +337,21 @@ function renderOriginOptions() {
     .join("");
 }
 
-function renderProductOptions() {
-  fillDatalist(els.modelList, state.products.map((item) => item.model).filter(Boolean));
-  fillDatalist(els.materialCodeList, state.products.flatMap((item) => item.materialCodes?.length ? item.materialCodes : [item.materialCode]).filter(Boolean));
-  fillDatalist(els.salesSeriesList, state.products.map((item) => item.salesSeries).filter(Boolean));
-}
-
-function fillDatalist(node, values) {
-  const unique = [...new Set(values)].sort((a, b) => a.localeCompare(b, "zh-CN"));
-  node.innerHTML = unique.map((value) => `<option value="${escapeHtml(value)}"></option>`).join("");
+function updateProductInfoFields() {
+  const info = findProductInfoByMaterialCode(els.materialCodeInput.value);
+  els.salesSeriesInput.value = info?.salesSeries || "";
+  els.modelInput.value = info?.model || "";
+  return info;
 }
 
 function runSingleQuery() {
+  const productInfo = updateProductInfoFields();
   const result = calculateBestOption({
     origin: els.originSelect.value,
     address: els.addressInput.value.trim(),
-    model: els.modelInput.value.trim(),
+    model: productInfo?.model || els.modelInput.value.trim(),
     materialCode: els.materialCodeInput.value.trim(),
-    salesSeries: els.salesSeriesInput.value.trim(),
+    salesSeries: productInfo?.salesSeries || els.salesSeriesInput.value.trim(),
     purchaseQty: parsePurchaseQty(els.quantityInput.value)
   });
   state.results = [result];
@@ -356,9 +366,7 @@ async function importBatchFile(file) {
     state.results = rows.map((row) => calculateBestOption({
       origin: pick(row, ["发货地", "供应商简称", "发货仓", "仓库"]) || els.originSelect.value,
       address: pick(row, ["顾客地址", "客户地址", "收货地址", "地址"]) || "",
-      model: pick(row, ["型号", "商品型号", "SKU", "sku"]) || "",
       materialCode: pick(row, ["物料编码", "物料代码", "商品编码", "产品编码", "存货编码"]) || "",
-      salesSeries: pick(row, ["销售系列", "系列", "产品系列", "商品系列"]) || "",
       purchaseQty: parsePurchaseQty(pick(row, ["购买件数", "商品购买件数", "件数", "数量"]))
     }));
     renderResults();
@@ -372,12 +380,13 @@ async function importBatchFile(file) {
 function calculateBestOption(input) {
   const originName = clean(input.origin);
   const address = clean(input.address);
-  const model = clean(input.model);
   const materialCode = clean(input.materialCode);
-  const salesSeries = clean(input.salesSeries);
+  const productInfo = findProductInfoByMaterialCode(materialCode);
+  const model = productInfo?.model || clean(input.model);
+  const salesSeries = productInfo?.salesSeries || clean(input.salesSeries);
   const purchaseQty = parsePurchaseQty(input.purchaseQty);
   const origin = findOrigin(originName);
-  const match = findProductMatch({ model, materialCode, salesSeries });
+  const match = findProductMatch({ materialCode });
   const product = match.product;
   const quoteZone = origin?.quoteZone || normalizeQuoteZone(originName);
   const addressCheck = validateCustomerAddress(address);
@@ -516,13 +525,11 @@ function findCityName(text, province) {
   return cityMatch ? cityMatch[1] : "";
 }
 
-function findProductMatch({ model, materialCode, salesSeries }) {
+function findProductMatch({ materialCode }) {
   let matches = state.products;
-  if (model) matches = matches.filter((item) => sameText(item.model, model));
   if (materialCode) matches = matches.filter((item) => (item.materialCodes || [item.materialCode]).some((code) => sameText(code, materialCode)));
-  if (salesSeries) matches = matches.filter((item) => sameText(item.salesSeries, salesSeries));
-  if (!matches.length) return { product: null, error: "商品包装明细中未找到匹配的物料。" };
-  if (matches.length > 1) return { product: null, error: "匹配到多个物料，请补充型号或物料编码。" };
+  if (!matches.length) return { product: null, error: "商品包装明细中未找到匹配的物料编码。" };
+  if (matches.length > 1) return { product: null, error: "该物料编码在商品包装明细中匹配到多行，请检查包装明细。" };
   return { product: matches[0], error: "" };
 }
 
@@ -637,10 +644,10 @@ function renderResults() {
 
 function downloadBatchTemplate() {
   const rows = [
-    { 发货地: "河北供应商", 顾客地址: "浙江省杭州市余杭区示例路1号", 物料编码: "MAT-A100", 销售系列: "示例系列", 型号: "A100", 购买件数: 1 },
-    { 发货地: "宁波供应商", 顾客地址: "江苏省南京市建邺区示例路2号", 物料编码: "MAT-B200", 销售系列: "示例系列", 型号: "B200", 购买件数: 2 }
+    { 发货地: "河北供应商", 顾客地址: "浙江省杭州市余杭区示例路1号", 物料编码: "MAT-A100", 购买件数: 1 },
+    { 发货地: "宁波供应商", 顾客地址: "江苏省南京市建邺区示例路2号", 物料编码: "MAT-B200", 购买件数: 2 }
   ];
-  const worksheet = XLSX.utils.json_to_sheet(rows, { header: ["发货地", "顾客地址", "物料编码", "销售系列", "型号", "购买件数"] });
+  const worksheet = XLSX.utils.json_to_sheet(rows, { header: ["发货地", "顾客地址", "物料编码", "购买件数"] });
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "地址查询导入模板");
   XLSX.writeFile(workbook, "物流地址查询导入模板.xlsx");
