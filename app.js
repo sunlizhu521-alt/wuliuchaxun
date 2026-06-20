@@ -40,11 +40,7 @@ const els = {
   exportResults: document.getElementById("exportResults"),
   downloadTemplate: document.getElementById("downloadTemplate"),
   dropZone: document.getElementById("dropZone"),
-  batchFile: document.getElementById("batchFile"),
-  libraryStatus: document.getElementById("libraryStatus"),
-  productCount: document.getElementById("productCount"),
-  quoteCount: document.getElementById("quoteCount"),
-  originCount: document.getElementById("originCount")
+  batchFile: document.getElementById("batchFile")
 };
 
 init();
@@ -94,13 +90,11 @@ async function loadLibrary() {
       state.quotes.push(...normalizeQuotes(rows, quoteSlot));
     }
 
-    renderSourceState(records);
     renderOriginOptions();
     renderProductOptions();
     toast("维度表已刷新。");
   } catch (error) {
     console.error(error);
-    els.libraryStatus.textContent = "加载失败";
     toast(error.message || "维度表加载失败");
   }
 }
@@ -288,17 +282,6 @@ function normalizeQuotes(rows, slot) {
       raw: row
     };
   }).filter(Boolean);
-}
-
-function renderSourceState(records) {
-  const coreIds = [slotIds.origin, slotIds.productPackage];
-  const quoteIds = quoteSlots.map((item) => item.id);
-  const coreReady = coreIds.filter((id) => records.has(id)).length;
-  const quoteReady = quoteIds.filter((id) => records.has(id)).length;
-  els.libraryStatus.textContent = `${coreReady}/2 + ${quoteReady}/5`;
-  els.productCount.textContent = state.products.length;
-  els.quoteCount.textContent = state.quotes.length;
-  els.originCount.textContent = state.origins.length;
 }
 
 function renderOriginOptions() {

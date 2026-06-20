@@ -210,36 +210,6 @@ select {
   color: var(--text);
 }
 
-.metrics {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
-  margin-bottom: 16px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  background: #fff;
-}
-
-.metric-card {
-  padding: 12px 14px;
-  border-left: 1px solid var(--line);
-}
-
-.metric-card:first-child {
-  border-left: 0;
-}
-
-.metric-card span {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.metric-card strong {
-  display: block;
-  margin-top: 8px;
-  font-size: 24px;
-}
-
 .panel {
   margin-bottom: 18px;
   overflow: visible;
@@ -572,10 +542,6 @@ th {
     grid-column: 1 / -1;
   }
 
-  .metrics {
-    grid-template-columns: 1fr 1fr;
-  }
-
   .library-card.file-slot {
     grid-template-columns: 1fr 1fr;
   }
@@ -594,7 +560,6 @@ th {
   .toolbar,
   .address-toolbar,
   .material-toolbar,
-  .metrics,
   .slot-grid,
   .library-grid,
   .library-card.file-slot {
