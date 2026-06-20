@@ -559,7 +559,7 @@ function exportResults() {
     物料编码: row.materialCode,
     商品名称: row.productName,
     购买数量: row.purchaseQty,
-    每件包裹件数: row.packageCount,
+    单件包裹数: row.packageCount,
     总重量: row.totalWeight,
     总计费重量: row.totalChargeWeight,
     推荐物流: row.carrier,
