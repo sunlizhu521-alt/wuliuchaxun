@@ -10,7 +10,6 @@ const slots = [
     name: "发货地址",
     expectedName: "发货地址.xlsx",
     description: "发货地、报价区域、仓库地址、省市区、联系人等发货信息。",
-    template: "origin",
     keywords: ["供应商简称", "发货地", "报价区域", "发货省", "发货市", "详细地址"]
   },
   {
@@ -18,7 +17,6 @@ const slots = [
     name: "商品信息表",
     expectedName: "商品信息表.xlsx",
     description: "商品基础信息维护槽位，包含物料编码、销售产品线、销售系列、型号、商品名称等字段。",
-    template: "product",
     keywords: ["物料编码", "销售产品线", "销售系列", "型号", "商品名称"]
   },
   {
@@ -26,7 +24,6 @@ const slots = [
     name: "商品包装明细",
     expectedName: "商品包装明细.xlsx",
     description: "型号、物料编码、商品名称、包裹 1 到包裹 6 的尺寸、重量和计费重量。",
-    template: "package",
     keywords: ["物料编码", "型号", "包裹1重量kg", "包裹1计费重量kg"]
   },
   {
@@ -34,7 +31,6 @@ const slots = [
     name: "物流公司报价",
     expectedName: "物流公司报价.xlsx",
     description: "物流公司报价表维护槽位，用于查询页读取物流报价。",
-    template: "quote",
     keywords: ["目的省", "目的市", "泡比", "首重", "续重", "是否可发"]
   },
   {
@@ -42,7 +38,6 @@ const slots = [
     name: "维度1",
     expectedName: "维度1.xlsx",
     description: "维度1扩展报价表槽位，用于查询页读取对应报价数据。",
-    template: "quote",
     keywords: ["目的省", "目的市", "首重kg", "续重费用", "是否可发"]
   },
   {
@@ -50,7 +45,6 @@ const slots = [
     name: "维度2",
     expectedName: "维度2.xlsx",
     description: "维度2扩展报价表槽位，用于查询页读取对应报价数据。",
-    template: "quote",
     keywords: ["目的省", "目的市", "首重kg", "续重费用", "是否可发"]
   },
   {
@@ -58,7 +52,6 @@ const slots = [
     name: "维度3",
     expectedName: "维度3.xlsx",
     description: "维度3扩展报价表槽位，用于查询页读取对应报价数据。",
-    template: "quote",
     keywords: ["目的省", "目的市", "首重kg", "续重费用", "是否可发"]
   },
   {
@@ -66,7 +59,6 @@ const slots = [
     name: "维度4",
     expectedName: "维度4.xlsx",
     description: "维度4扩展报价表槽位，用于查询页读取对应报价数据。",
-    template: "quote",
     keywords: ["目的省", "目的市", "首重kg", "续重费用", "是否可发"]
   }
 ];
@@ -202,9 +194,6 @@ function renderCard(slot, record) {
   const refreshMonth = record?.refreshMonth || deriveRefreshMonth(record?.fileName || record?.pendingName, record?.savedAt);
   const updateDate = record ? formatDate(record.appliedAt || record.savedAt) : "-";
   const sheets = record?.sheetNames?.length ? record.sheetNames.join("、") : "等待解析";
-  const templateButton = slot.template
-    ? `<button type="button" data-template="${slot.template}">下载模板</button>`
-    : "";
 
   return `
     <article class="library-card file-slot" data-drop="${slot.id}" data-slot-id="${slot.id}">
@@ -237,7 +226,6 @@ function renderCard(slot, record) {
         <button type="button" data-choose="${slot.id}">${record ? "替换文件" : "上传文件"}</button>
         <button type="button" data-apply="${slot.id}" ${hasFile(record) ? "" : "disabled"}>应用刷新</button>
         <button type="button" data-delete="${slot.id}" ${record ? "" : "disabled"}>删除</button>
-        ${templateButton}
       </div>
     </article>
   `;
@@ -261,9 +249,6 @@ function bindCardEvents() {
   });
   grid.querySelectorAll("[data-delete]").forEach((button) => {
     button.addEventListener("click", () => clearSlot(button.dataset.delete));
-  });
-  grid.querySelectorAll("[data-template]").forEach((button) => {
-    button.addEventListener("click", () => downloadSlotTemplate(button.dataset.template));
   });
   grid.querySelectorAll("[data-drop]").forEach((card) => bindDropUpload(card, card.dataset.drop));
 }
@@ -708,110 +693,6 @@ function downloadJsonFile(fileName, payload) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
-}
-
-function downloadSlotTemplate(type) {
-  const templates = {
-    origin: {
-      fileName: "发货地址模板.xlsx",
-      sheetName: "发货地址",
-      rows: [
-        {
-          供应商简称: "河北供应商",
-          发货地: "河北仓",
-          报价区域: "河北",
-          发货省: "河北省",
-          发货市: "示例市",
-          发货区: "示例区",
-          详细地址: "河北省示例市示例区示例路1号",
-          联系人: "张三",
-          联系电话: "13800000000",
-          备注: ""
-        },
-        {
-          供应商简称: "宁波供应商",
-          发货地: "宁波仓",
-          报价区域: "宁波",
-          发货省: "浙江省",
-          发货市: "宁波市",
-          发货区: "示例区",
-          详细地址: "浙江省宁波市示例区示例路2号",
-          联系人: "李四",
-          联系电话: "13900000000",
-          备注: ""
-        }
-      ]
-    },
-    product: {
-      fileName: "商品信息表模板.xlsx",
-      sheetName: "商品信息表",
-      rows: [
-        {
-          物料编码: "MAT-A100",
-          销售产品线: "示例产品线",
-          销售系列: "示例系列",
-          型号: "A100",
-          商品名称: "示例商品",
-          商品分类: "示例分类",
-          品牌: "",
-          单位: "件",
-          备注: ""
-        }
-      ]
-    },
-    package: {
-      fileName: "商品包装明细模板.xlsx",
-      sheetName: "商品包装明细",
-      rows: [buildPackageTemplateRow()]
-    },
-    quote: {
-      fileName: "物流报价模板.xlsx",
-      sheetName: "示例发货地-示例物流",
-      rows: [
-        {
-          目的省: "浙江省",
-          目的市: "杭州市",
-          目的区: "",
-          泡比: 6000,
-          "首重（15KG）": 29,
-          "续重（15-60KG）": 2,
-          "续重（60KG以上）": 1.5,
-          最低收费: 8,
-          是否可发: "是",
-          限制说明: "",
-          备注: ""
-        }
-      ]
-    }
-  };
-  const template = templates[type];
-  if (!template) return;
-  const worksheet = XLSX.utils.json_to_sheet(template.rows);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, template.sheetName);
-  XLSX.writeFile(workbook, template.fileName);
-}
-
-function buildPackageTemplateRow() {
-  const row = {
-    物料编码: "MAT-A100",
-    物料编码2: "",
-    物料编码3: "",
-    件数: 1,
-    总实际重量: 12,
-    销售系列: "示例系列",
-    型号: "A100",
-    商品名称: "示例商品",
-    备注: ""
-  };
-  for (let index = 1; index <= 6; index += 1) {
-    row[`包裹${index}长cm`] = index === 1 ? 60 : "";
-    row[`包裹${index}宽cm`] = index === 1 ? 40 : "";
-    row[`包裹${index}高cm`] = index === 1 ? 30 : "";
-    row[`包裹${index}重量kg`] = index === 1 ? 12 : "";
-    row[`包裹${index}计费重量kg`] = index === 1 ? 12 : "";
-  }
-  return row;
 }
 
 function formatUploadError(error) {
