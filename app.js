@@ -818,12 +818,13 @@ function buildResult(input, origin, product, best, candidates, message) {
 
 function renderResults() {
   if (!state.results.length) {
-    els.resultBody.innerHTML = `<tr><td colspan="12" class="empty">暂无查询结果</td></tr>`;
+    els.resultBody.innerHTML = `<tr><td colspan="13" class="empty">暂无查询结果</td></tr>`;
     els.exportResults.disabled = true;
     return;
   }
   els.resultBody.innerHTML = state.results.map((row) => `
     <tr>
+      <td>${escapeHtml(row.salesProductLine)}</td>
       <td>${escapeHtml(row.salesSeries)}</td>
       <td>${escapeHtml(row.model)}</td>
       <td>${escapeHtml(row.materialCode)}</td>
@@ -859,6 +860,7 @@ function downloadBatchTemplate() {
 
 function exportResults() {
   const rows = state.results.map((row) => ({
+    销售产品线: row.salesProductLine,
     销售系列: row.salesSeries,
     销售型号: row.model,
     物料编码: row.materialCode,
