@@ -3,47 +3,75 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>维度表库 - 物流查询系统</title>
-  <link rel="stylesheet" href="styles.css?v=20260624">
+  <title>维度表文件库 - 物流查询系统</title>
+  <link rel="stylesheet" href="styles.css?v=20260630">
 </head>
-<body>
+<body class="file-library-page" data-library-type="dimension">
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-mark">物</span>
-        <div>
-          <strong>物流查询系统</strong>
-          <small>维度数据维护</small>
-        </div>
+        <strong>物流查询系统</strong>
+        <span>供应链维护更新</span>
       </div>
       <nav class="nav">
         <a href="index.html">物流查询</a>
-        <a class="active" href="dimension-library.html">维度表库</a>
+        <a class="active" href="dimension-library.html">维度表文件库</a>
       </nav>
     </aside>
 
-    <main class="main">
-      <header class="page-header">
+    <main class="content">
+      <header class="topbar">
         <div>
-          <h1>维度表库</h1>
-          <p>8 个固定槽位。上传后点击应用刷新，查询页读取当前浏览器已应用的维度表。</p>
+          <h1>维度表文件库</h1>
+          <p>上传发货地址、商品信息、商品包装明细和物流报价表，应用刷新后查询页读取当前浏览器已应用文件。</p>
         </div>
-        <div class="header-actions">
-          <button class="button primary" id="applyAll">一键全部应用刷新</button>
-          <a class="button ghost" href="index.html">返回查询</a>
+        <div class="topbar-actions">
+          <button id="applyAllBtn" class="secondary" type="button">一键全部应用刷新</button>
+          <button id="clearCacheBtn" class="danger" type="button">清除缓存</button>
         </div>
       </header>
 
-      <section class="notice">
-        GitHub Pages 默认只发布页面框架和空共享包，不提交业务 Excel 数据。每位使用者在自己的浏览器中上传最新维度表。
+      <section class="library-summary">
+        <div class="summary-head">
+          <div>
+            <span id="libraryEyebrow" class="summary-eyebrow">DIMENSION FILES</span>
+            <h2 id="libraryTitle">物流维度表文件库</h2>
+          </div>
+          <span id="savedBadge" class="saved-badge">维度文件已保存</span>
+        </div>
+        <div class="summary-metrics">
+          <div>
+            <span>维度上限</span>
+            <strong id="slotLimit">0</strong>
+          </div>
+          <div>
+            <span>已上传维度</span>
+            <strong id="uploadedCount">0</strong>
+          </div>
+          <div>
+            <span>已应用维度</span>
+            <strong id="appliedCount">0</strong>
+          </div>
+          <div>
+            <span>最近更新</span>
+            <strong id="latestUpdate">-</strong>
+          </div>
+        </div>
+        <div class="toolbar">
+          <button id="refreshBtn" type="button">应用刷新</button>
+          <button id="downloadSharedBtn" class="secondary" type="button">导出共享数据包</button>
+          <button id="importSharedBtn" class="secondary" type="button">导入共享数据包</button>
+          <input id="importSharedInput" class="hidden-file-input" type="file" accept=".json">
+          <span class="muted" id="sharedStatus">正在同步共享文件库...</span>
+        </div>
       </section>
 
-      <section class="slot-grid" id="slotGrid"></section>
+      <section id="libraryGrid" class="library-grid"></section>
     </main>
   </div>
 
-  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="vendor/xlsx.full.min.js?v=20260630"></script>
   <script src="shared-library.js?v=20260623"></script>
-  <script src="dimension-library.js?v=20260628"></script>
+  <script src="dimension-library.js?v=20260630"></script>
 </body>
 </html>
