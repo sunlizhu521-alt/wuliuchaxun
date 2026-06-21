@@ -28,6 +28,7 @@ const els = {
   districtSelect: document.getElementById("districtSelect"),
   addressInput: document.getElementById("addressInput"),
   modelInput: document.getElementById("modelInput"),
+  productShortNameInput: document.getElementById("productShortNameInput"),
   materialCodeInput: document.getElementById("materialCodeInput"),
   salesProductLineInput: document.getElementById("salesProductLineInput"),
   salesSeriesInput: document.getElementById("salesSeriesInput"),
@@ -72,6 +73,8 @@ function bindEvents() {
     renderDistrictOptions();
   });
   els.citySelect.addEventListener("change", renderDistrictOptions);
+  els.productShortNameInput.addEventListener("input", updateProductInfoFields);
+  els.productShortNameInput.addEventListener("change", updateProductInfoFields);
   els.materialCodeInput.addEventListener("input", updateProductInfoFields);
   els.materialCodeInput.addEventListener("change", updateProductInfoFields);
   els.calculationSelect.addEventListener("change", () => renderSelectedCalculationDetail());
@@ -264,9 +267,10 @@ function normalizeProducts(packageRows, infoItems = []) {
     const model = info?.model || packageIdentity.model || "";
     const materialCodes = packageIdentity.materialCodes;
     const materialCode = materialCodes[0] || packageIdentity.materialCode || "";
+    const shortName = packageIdentity.shortName || "";
     const salesProductLine = info?.salesProductLine || packageIdentity.salesProductLine || "";
     const salesSeries = info?.salesSeries || packageIdentity.salesSeries || "";
-    if (!model && !materialCode && !salesProductLine && !salesSeries) return null;
+    if (!model && !materialCode && !shortName && !salesProductLine && !salesSeries) return null;
     const packages = parsePackages(row);
     const singleWeight = roundWeight(packages.reduce((sum, item) => sum + (item.weight || item.chargeWeight || 0), 0));
     const singleChargeWeight = roundWeight(packages.reduce((sum, item) => sum + item.chargeWeight, 0));
@@ -276,6 +280,7 @@ function normalizeProducts(packageRows, infoItems = []) {
     return {
       model,
       materialCode,
+      shortName,
       salesProductLine,
       salesSeries,
       name: info?.name || packageIdentity.name || "",
@@ -297,6 +302,7 @@ function normalizeProductIdentity(row) {
     model: clean(pick(row, ["销售型号", "型号", "商品型号", "产品型号", "SKU", "sku", "model"])),
     materialCode: materialCodes[0] || clean(pick(row, ["物料编码", "物料代码", "商品编码", "产品编码", "存货编码"])),
     materialCodes,
+    shortName: clean(pick(row, ["货品简称", "货品名称简称", "货品简名", "简称"])),
     salesProductLine: clean(pick(row, ["销售产品线", "产品线", "一级产品线", "销售线"])),
     salesSeries: clean(pick(row, ["销售系列", "系列", "产品系列", "商品系列"])),
     name: clean(pick(row, ["商品名称", "品名", "产品名称", "物料名称"]))
@@ -651,11 +657,15 @@ function parsePastedAddress(address) {
 }
 
 function updateProductInfoFields() {
-  const info = findProductInfoByMaterialCode(els.materialCodeInput.value);
-  els.salesProductLineInput.value = info?.salesProductLine || "";
-  els.salesSeriesInput.value = info?.salesSeries || "";
-  els.modelInput.value = info?.model || "";
-  return info;
+  const match = findProductMatch({
+    shortName: els.productShortNameInput.value,
+    materialCode: els.materialCodeInput.value
+  });
+  const product = match.product;
+  els.salesProductLineInput.value = product?.salesProductLine || "";
+  els.salesSeriesInput.value = product?.salesSeries || "";
+  els.modelInput.value = product?.model || "";
+  return product;
 }
 
 async function runSingleQuery() {
@@ -672,7 +682,7 @@ async function runSingleQuery() {
   setQueryProgress("正在准备查询...", 20, "loading");
   try {
     await nextFrame();
-    const productInfo = updateProductInfoFields();
+    const product = updateProductInfoFields();
     const addressData = buildManualCustomerAddress();
     setQueryProgress("正在匹配商品、地址和报价...", 65, "loading");
     await nextFrame();
@@ -680,10 +690,11 @@ async function runSingleQuery() {
       origin: els.originSelect.value,
       address: addressData.address,
       addressError: addressData.error,
-      model: productInfo?.model || els.modelInput.value.trim(),
+      model: product?.model || els.modelInput.value.trim(),
+      shortName: els.productShortNameInput.value.trim(),
       materialCode: els.materialCodeInput.value.trim(),
-      salesProductLine: productInfo?.salesProductLine || els.salesProductLineInput.value.trim(),
-      salesSeries: productInfo?.salesSeries || els.salesSeriesInput.value.trim(),
+      salesProductLine: product?.salesProductLine || els.salesProductLineInput.value.trim(),
+      salesSeries: product?.salesSeries || els.salesSeriesInput.value.trim(),
       purchaseQty: parsePurchaseQty(els.quantityInput.value)
     });
     state.results = [result];
@@ -743,6 +754,7 @@ async function importBatchFile(file) {
     state.results = rows.map((row) => calculateBestOption({
       origin: pick(row, ["发货地", "供应商简称", "发货仓", "仓库"]) || els.originSelect.value,
       address: pick(row, ["顾客地址", "客户地址", "收货地址", "地址"]) || "",
+      shortName: pick(row, ["货品简称", "货品名称简称", "货品简名", "简称"]) || "",
       materialCode: pick(row, ["物料编码", "物料代码", "商品编码", "产品编码", "存货编码"]) || "",
       purchaseQty: parsePurchaseQty(pick(row, ["购买件数", "商品购买件数", "件数", "数量"]))
     }));
@@ -757,14 +769,14 @@ async function importBatchFile(file) {
 function calculateBestOption(input) {
   const originName = clean(input.origin);
   const address = clean(input.address);
+  const shortName = clean(input.shortName);
   const materialCode = clean(input.materialCode);
-  const productInfo = findProductInfoByMaterialCode(materialCode);
-  const model = productInfo?.model || clean(input.model);
-  const salesSeries = productInfo?.salesSeries || clean(input.salesSeries);
   const purchaseQty = parsePurchaseQty(input.purchaseQty);
   const origin = findOrigin(originName);
-  const match = findProductMatch({ materialCode });
+  const match = findProductMatch({ shortName, materialCode });
   const product = match.product;
+  const model = product?.model || clean(input.model);
+  const salesSeries = product?.salesSeries || clean(input.salesSeries);
   const addressCheck = validateCustomerAddress(address);
 
   if (!originName) {
@@ -779,8 +791,8 @@ function calculateBestOption(input) {
   if (!addressCheck.valid) {
     return buildResult(input, origin, product, null, [], addressCheck.message);
   }
-  if (!materialCode) {
-    return buildResult(input, origin, product, null, [], "物料编码为必填项。");
+  if (!shortName) {
+    return buildResult(input, origin, product, null, [], "货品简称为必填项。");
   }
   if (!origin) {
     return buildResult(input, origin, product, null, [], "发货地址表中未找到该发货地。");
@@ -911,11 +923,24 @@ function findCityName(text, province) {
   return cityMatch ? cityMatch[1] : "";
 }
 
-function findProductMatch({ materialCode }) {
+function findProductMatch({ shortName, materialCode }) {
   let matches = state.products;
+  if (shortName) matches = matches.filter((item) => sameText(item.shortName, shortName));
   if (materialCode) matches = matches.filter((item) => (item.materialCodes || [item.materialCode]).some((code) => sameText(code, materialCode)));
-  if (!matches.length) return { product: null, error: "商品包装明细中未找到匹配的物料编码。" };
-  if (matches.length > 1) return { product: null, error: "该物料编码在商品包装明细中匹配到多行，请检查包装明细。" };
+  if (!matches.length) {
+    return {
+      product: null,
+      error: materialCode
+        ? "商品包装明细中未找到同时匹配货品简称和物料编码的商品。"
+        : "商品包装明细中未找到匹配的货品简称。"
+    };
+  }
+  if (matches.length > 1) {
+    return {
+      product: null,
+      error: "该货品简称在商品包装明细中匹配到多行，请补充物料编码或检查包装明细。"
+    };
+  }
   return { product: matches[0], error: "" };
 }
 
@@ -1024,11 +1049,12 @@ function buildResult(input, origin, product, best, candidates, message) {
     origin: clean(input.origin),
     quoteZone: origin?.quoteZone || normalizeQuoteZone(input.origin) || "",
     address: clean(input.address),
+    shortName: product?.shortName || clean(input.shortName),
     model: product?.model || clean(input.model),
     materialCode: product?.materialCode || clean(input.materialCode),
     salesProductLine: product?.salesProductLine || clean(input.salesProductLine),
     salesSeries: product?.salesSeries || clean(input.salesSeries),
-    productName: product?.name || "",
+    productName: product?.name || product?.shortName || "",
     purchaseQty,
     packageCount: product?.packageCount || 0,
     totalActualWeight,
@@ -1074,7 +1100,7 @@ function buildCalculationDetail({ item, isBest, product, purchaseQty, totalVolum
 
 function renderResults() {
   if (!state.results.length) {
-    els.resultBody.innerHTML = `<tr><td colspan="14" class="empty">暂无查询结果</td></tr>`;
+    els.resultBody.innerHTML = `<tr><td colspan="15" class="empty">暂无查询结果</td></tr>`;
     renderCalculationSelector();
     els.exportResults.disabled = true;
     return;
@@ -1175,9 +1201,9 @@ function downloadBatchTemplate() {
     toast("发货地选项为空，请先在维度表库上传并应用发货地址。");
   }
   const templateRows = [
-    ["顾客地址", "物料编码", "购买件数", "发货地"],
-    ["浙江省杭州市余杭区示例路1号", "MAT-A100", 1, ""],
-    ["江苏省南京市建邺区示例路2号", "MAT-B200", 2, ""]
+    ["顾客地址", "货品简称", "物料编码", "购买件数", "发货地"],
+    ["浙江省杭州市余杭区示例路1号", "示例货品A", "MAT-A100", 1, ""],
+    ["江苏省南京市建邺区示例路2号", "示例货品B", "MAT-B200", 2, ""]
   ];
   const workbookBytes = createBatchTemplateWorkbook(templateRows, originNames);
   downloadBinaryFile("物流地址查询导入模板.xlsx", workbookBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -1254,13 +1280,13 @@ function buildTemplateSheetXml(rows, optionCount) {
   }).join("");
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <dimension ref="A1:D501"/>
+  <dimension ref="A1:E501"/>
   <sheetViews><sheetView workbookViewId="0"/></sheetViews>
   <sheetFormatPr defaultRowHeight="18"/>
-  <cols><col min="1" max="1" width="36" customWidth="1"/><col min="2" max="2" width="18" customWidth="1"/><col min="3" max="3" width="12" customWidth="1"/><col min="4" max="4" width="22" customWidth="1"/></cols>
+  <cols><col min="1" max="1" width="36" customWidth="1"/><col min="2" max="2" width="18" customWidth="1"/><col min="3" max="3" width="18" customWidth="1"/><col min="4" max="4" width="12" customWidth="1"/><col min="5" max="5" width="22" customWidth="1"/></cols>
   <sheetData>${sheetRows}</sheetData>
   <dataValidations count="1">
-    <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="D2:D501">
+    <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="E2:E501">
       <formula1>'发货地选项'!$A$1:$A$${optionCount}</formula1>
     </dataValidation>
   </dataValidations>

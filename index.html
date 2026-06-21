@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>物流查询系统</title>
-  <link rel="stylesheet" href="styles.css?v=20260650">
+  <link rel="stylesheet" href="styles.css?v=20260652">
 </head>
 <body>
   <div class="app-shell">
@@ -77,20 +77,24 @@
       <section class="toolbar material-toolbar">
         <div class="toolbar-title">商品信息</div>
         <label class="field">
-          <span>物料编码（必填）</span>
-          <input id="materialCodeInput" name="logistics-material-code" type="text" placeholder="输入物料编码" autocomplete="new-password" autocapitalize="off" spellcheck="false" required>
+          <span>货品简称（必填）</span>
+          <input id="productShortNameInput" name="logistics-product-short-name" type="text" placeholder="输入货品简称" autocomplete="new-password" autocapitalize="off" spellcheck="false" required>
+        </label>
+        <label class="field">
+          <span>物料编码</span>
+          <input id="materialCodeInput" name="logistics-material-code" type="text" placeholder="选填" autocomplete="new-password" autocapitalize="off" spellcheck="false">
         </label>
         <label class="field">
           <span>销售产品线</span>
-          <input id="salesProductLineInput" type="text" placeholder="根据物料编码自动带出" readonly>
+          <input id="salesProductLineInput" type="text" placeholder="根据货品简称自动带出" readonly>
         </label>
         <label class="field">
           <span>销售系列</span>
-          <input id="salesSeriesInput" type="text" placeholder="根据物料编码自动带出" readonly>
+          <input id="salesSeriesInput" type="text" placeholder="根据货品简称自动带出" readonly>
         </label>
         <label class="field">
           <span>型号</span>
-          <input id="modelInput" type="text" placeholder="根据物料编码自动带出" readonly>
+          <input id="modelInput" type="text" placeholder="根据货品简称自动带出" readonly>
         </label>
         <label class="field short">
           <span>购买件数</span>
@@ -162,7 +166,7 @@
         <div class="panel-header">
           <div>
             <h2>批量导入查询</h2>
-            <p>支持拖拽 Excel/CSV，模板字段为：顾客地址、物料编码（必填）、购买件数、发货地；发货地可通过模板下拉选择。</p>
+            <p>支持拖拽 Excel/CSV，模板字段为：顾客地址、货品简称（必填）、物料编码（选填）、购买件数、发货地；发货地可通过模板下拉选择。</p>
           </div>
           <button class="button" id="downloadTemplate">下载导入模板</button>
         </div>
@@ -178,6 +182,6 @@
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="shared-library.js?v=20260623"></script>
   <script src="china-regions.js?v=20260632"></script>
-  <script src="app.js?v=20260650"></script>
+  <script src="app.js?v=20260652"></script>
 </body>
 </html>
