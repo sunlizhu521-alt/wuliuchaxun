@@ -302,7 +302,7 @@ function normalizeProductIdentity(row) {
     model: clean(pick(row, ["销售型号", "型号", "商品型号", "产品型号", "SKU", "sku", "model"])),
     materialCode: materialCodes[0] || clean(pick(row, ["物料编码", "物料代码", "商品编码", "产品编码", "存货编码"])),
     materialCodes,
-    shortName: clean(pick(row, ["货品简称", "货品名称简称", "货品简名", "简称"])),
+    shortName: clean(pick(row, ["货品简称", "货品名称简称", "货品简名", "货品名称", "货品", "商品简称", "产品简称", "简称"])),
     salesProductLine: clean(pick(row, ["销售产品线", "产品线", "一级产品线", "销售线"])),
     salesSeries: clean(pick(row, ["销售系列", "系列", "产品系列", "商品系列"])),
     name: clean(pick(row, ["商品名称", "品名", "产品名称", "物料名称"]))
@@ -924,7 +924,7 @@ function findCityName(text, province) {
 
 function findProductMatch({ shortName, materialCode }) {
   let matches = state.products;
-  if (shortName) matches = matches.filter((item) => sameText(item.shortName, shortName));
+  if (shortName) matches = matches.filter((item) => sameProductKey(item.shortName, shortName));
   if (materialCode) matches = matches.filter((item) => (item.materialCodes || [item.materialCode]).some((code) => sameText(code, materialCode)));
   if (!matches.length) {
     return {
@@ -935,10 +935,8 @@ function findProductMatch({ shortName, materialCode }) {
     };
   }
   if (matches.length > 1) {
-    return {
-      product: null,
-      error: "该货品简称在商品包装明细中匹配到多行，请补充物料编码或检查包装明细。"
-    };
+    const preferred = matches.find((item) => item.totalVolume || item.packageCount || item.materialCode) || matches[0];
+    return { product: preferred, error: "" };
   }
   return { product: matches[0], error: "" };
 }
@@ -1508,6 +1506,19 @@ function normalizeQuoteZone(value) {
 
 function sameText(a, b) {
   return normalizeText(a) === normalizeText(b);
+}
+
+function normalizeProductKey(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, "")
+    .replace(/[‐‑‒–—―－_]/g, "-")
+    .replace(/-/g, "")
+    .toLowerCase();
+}
+
+function sameProductKey(a, b) {
+  return normalizeProductKey(a) === normalizeProductKey(b);
 }
 
 function clean(value) {
