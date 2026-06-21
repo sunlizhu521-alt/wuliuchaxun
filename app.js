@@ -40,6 +40,7 @@ const els = {
   queryProgress: document.getElementById("queryProgress"),
   queryProgressText: document.getElementById("queryProgressText"),
   queryProgressBar: document.getElementById("queryProgressBar"),
+  clearQueryInfo: document.getElementById("clearQueryInfo"),
   reloadLibrary: document.getElementById("reloadLibrary"),
   resultBody: document.getElementById("resultBody"),
   resultHint: document.getElementById("resultHint"),
@@ -62,6 +63,7 @@ async function init() {
 }
 
 function bindEvents() {
+  els.clearQueryInfo.addEventListener("click", clearQueryInfo);
   els.reloadLibrary.addEventListener("click", loadLibrary);
   els.runQuery.addEventListener("click", runSingleQuery);
   els.recognizeAddressBtn.addEventListener("click", recognizePastedAddress);
@@ -1128,6 +1130,30 @@ function renderResults() {
     ? `共 ${state.results.length} 条，已匹配 ${matched} 条。未匹配原因：${firstFailure.message}`
     : `共 ${state.results.length} 条，已匹配 ${matched} 条。`;
   els.exportResults.disabled = false;
+}
+
+function clearQueryInfo() {
+  state.results = [];
+  els.pastedAddressInput.value = "";
+  els.originSelect.value = "";
+  els.provinceSelect.value = "";
+  renderCityOptions();
+  renderDistrictOptions();
+  els.addressInput.value = "";
+  els.productShortNameInput.value = "";
+  els.materialCodeInput.value = "";
+  els.salesProductLineInput.value = "";
+  els.salesSeriesInput.value = "";
+  els.modelInput.value = "";
+  els.quantityInput.value = "1";
+  els.batchFile.value = "";
+  els.queryProgress.hidden = true;
+  els.queryProgress.dataset.status = "";
+  els.queryProgressText.textContent = "等待查询";
+  els.queryProgressBar.style.width = "0%";
+  els.resultHint.textContent = "请输入查询条件。";
+  renderResults();
+  toast("查询信息已清除。");
 }
 
 function renderCalculationSelector(forceFirst = false) {
