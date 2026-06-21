@@ -657,8 +657,16 @@ function parsePastedAddress(address) {
 }
 
 function updateProductInfoFields() {
+  const shortName = clean(els.productShortNameInput.value);
+  if (!shortName) {
+    els.materialCodeInput.value = "";
+    els.salesProductLineInput.value = "";
+    els.salesSeriesInput.value = "";
+    els.modelInput.value = "";
+    return null;
+  }
   const match = findProductMatch({
-    shortName: els.productShortNameInput.value
+    shortName
   });
   const product = match.product;
   els.materialCodeInput.value = product?.materialCode || "";

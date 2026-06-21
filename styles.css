@@ -228,11 +228,15 @@ select {
 
 .address-toolbar {
   grid-template-columns:
-    minmax(150px, 190px)
     minmax(130px, 160px)
     minmax(130px, 160px)
     minmax(150px, 180px)
     minmax(260px, 1fr);
+}
+
+.origin-toolbar {
+  grid-template-columns: minmax(180px, 240px) 1fr;
+  margin-bottom: 0;
 }
 
 .address-recognizer {
@@ -288,6 +292,14 @@ select {
 
 .query-progress[hidden] {
   display: none;
+}
+
+.query-actions {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+  justify-content: flex-start;
+  white-space: nowrap;
 }
 
 .query-progress-track {
@@ -785,6 +797,7 @@ th {
 
   .address-toolbar,
   .address-recognizer,
+  .origin-toolbar,
   .material-toolbar {
     grid-template-columns: 1fr 1fr;
   }
@@ -815,6 +828,7 @@ th {
   .toolbar,
   .address-toolbar,
   .address-recognizer,
+  .origin-toolbar,
   .material-toolbar,
   .slot-grid,
   .library-grid,
