@@ -43,19 +43,19 @@
         </div>
       </header>
 
+      <section class="toolbar query-toolbar origin-toolbar">
+        <label class="field">
+          <span>发货地（必选）</span>
+          <select id="originSelect" required></select>
+        </label>
+      </section>
+
       <section class="toolbar address-recognizer">
         <label class="field">
           <span>地址识别</span>
           <input id="pastedAddressInput" type="text" placeholder="粘贴顾客完整地址">
         </label>
         <button class="button" id="recognizeAddressBtn" type="button">识别地址</button>
-      </section>
-
-      <section class="toolbar query-toolbar origin-toolbar">
-        <label class="field">
-          <span>发货地（必选）</span>
-          <select id="originSelect" required></select>
-        </label>
       </section>
 
       <section class="toolbar query-toolbar address-toolbar">
@@ -188,6 +188,6 @@
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="shared-library.js?v=20260623"></script>
   <script src="china-regions.js?v=20260632"></script>
-  <script src="app.js?v=20260657"></script>
+  <script src="app.js?v=20260658"></script>
 </body>
 </html>
