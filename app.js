@@ -13,6 +13,7 @@ const state = {
   products: [],
   productInfo: [],
   quotes: [],
+  floorFees: [],
   origins: [],
   results: [],
   libraryLoading: false,
@@ -22,6 +23,7 @@ const state = {
 const els = {
   originSelect: document.getElementById("originSelect"),
   elevatorSelect: document.getElementById("elevatorSelect"),
+  floorTypeSelect: document.getElementById("floorTypeSelect"),
   pastedAddressInput: document.getElementById("pastedAddressInput"),
   recognizeAddressBtn: document.getElementById("recognizeAddressBtn"),
   provinceSelect: document.getElementById("provinceSelect"),
@@ -59,6 +61,7 @@ init();
 async function init() {
   bindEvents();
   renderProvinceOptions();
+  updateFloorTypeState();
   setLibraryProgress("正在准备加载维度库...", 5, "loading");
   await loadLibrary();
 }
@@ -67,6 +70,7 @@ function bindEvents() {
   els.clearQueryInfo.addEventListener("click", clearQueryInfo);
   els.reloadLibrary.addEventListener("click", loadLibrary);
   els.runQuery.addEventListener("click", runSingleQuery);
+  els.elevatorSelect.addEventListener("change", updateFloorTypeState);
   els.recognizeAddressBtn.addEventListener("click", recognizePastedAddress);
   els.pastedAddressInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") recognizePastedAddress();
@@ -128,7 +132,9 @@ async function loadLibrary() {
     );
     setLibraryProgress("正在解析物流公司报价...", 88, "loading");
     await nextFrame();
-    state.quotes = normalizeLogisticsQuoteSheets(await sheetsFromRecord(records.get(slotIds.logisticsQuote)));
+    const quoteSheets = await sheetsFromRecord(records.get(slotIds.logisticsQuote));
+    state.quotes = normalizeLogisticsQuoteSheets(quoteSheets);
+    state.floorFees = normalizeFloorFeeSheets(quoteSheets);
 
     renderOriginOptions();
     updateProductInfoFields();
@@ -136,7 +142,7 @@ async function loadLibrary() {
     state.libraryReady = !missing.length;
     if (state.libraryReady) {
       setLibraryProgress(
-        `维度库加载完成：发货地 ${state.origins.length} 个，商品 ${state.products.length} 条，报价 ${state.quotes.length} 条。`,
+        `维度库加载完成：发货地 ${state.origins.length} 个，商品 ${state.products.length} 条，报价 ${state.quotes.length} 条，上楼规则 ${state.floorFees.length} 条。`,
         100,
         "done"
       );
@@ -352,6 +358,7 @@ function findProductInfoByMaterialCode(materialCode) {
 function parsePackages(row) {
   const packages = [];
   for (let index = 1; index <= 20; index += 1) {
+    const explicitVolume = parseNumber(pick(row, [`体积${index}`, `子包裹体积${index}`, `包裹${index}体积`, `包裹${index}体积cm3`, `包裹${index}体积cm³`]));
     const length = parseNumber(pick(row, [`包裹${index}长cm`, `包裹${index}长度cm`, `包裹${index}长`]));
     const width = parseNumber(pick(row, [`包裹${index}宽cm`, `包裹${index}宽度cm`, `包裹${index}宽`]));
     const height = parseNumber(pick(row, [`包裹${index}高cm`, `包裹${index}高度cm`, `包裹${index}高`]));
@@ -359,9 +366,11 @@ function parsePackages(row) {
     const explicitChargeWeight = parseNumber(pick(row, [`包裹${index}计费重量kg`, `包裹${index}计费重量`, `包裹${index}抛重kg`]));
     const volumeWeight = calcVolumeWeight(length, width, height);
     const chargeWeight = explicitChargeWeight || Math.max(weight, volumeWeight);
-    if (!length && !width && !height && !weight && !explicitChargeWeight) continue;
+    const volume = explicitVolume || (length && width && height ? length * width * height : 0);
+    if (!explicitVolume && !length && !width && !height && !weight && !explicitChargeWeight) continue;
     packages.push({
       index,
+      volume,
       length,
       width,
       height,
@@ -374,7 +383,7 @@ function parsePackages(row) {
   if (!packages.length) {
     const weight = parseNumber(pick(row, ["计费重量kg", "计费重量", "重量kg", "重量", "实际重量kg"]));
     if (weight) {
-      packages.push({ index: 1, length: 0, width: 0, height: 0, weight, volumeWeight: 0, chargeWeight: weight });
+      packages.push({ index: 1, volume: 0, length: 0, width: 0, height: 0, weight, volumeWeight: 0, chargeWeight: weight });
     }
   }
   return packages;
@@ -382,10 +391,91 @@ function parsePackages(row) {
 
 function normalizeLogisticsQuoteSheets(sheets) {
   return sheets.flatMap((sheet) => {
+    if (isFloorFeeSheet(sheet.sheetName)) return [];
     const sheetMeta = parseQuoteSheetName(sheet.sheetName);
     if (!sheetMeta) return [];
     return sheet.rows.map((row) => normalizeLogisticsQuoteRow(row, sheetMeta, sheet.sheetName)).filter(Boolean);
   });
+}
+
+function normalizeFloorFeeSheets(sheets) {
+  const floorSheet = sheets.find((sheet) => isFloorFeeSheet(sheet.sheetName));
+  if (!floorSheet) return [];
+  return floorSheet.rows.map(normalizeFloorFeeRow).filter(Boolean);
+}
+
+function isFloorFeeSheet(sheetName) {
+  const text = normalizeText(sheetName);
+  return text.includes("上楼收费") || text.includes("上楼费用");
+}
+
+function normalizeFloorFeeRow(row) {
+  const carrier = clean(pick(row, ["快递公司", "物流公司", "承运商"]));
+  const floorType = clean(pick(row, ["楼梯类型", "上楼类型", "楼梯", "类型"]));
+  const ruleText = clean(pick(row, ["费用", "收费", "收费规则", "上楼费用"]));
+  if (!carrier || !floorType || !ruleText) return null;
+  return {
+    carrier,
+    floorType,
+    ruleText,
+    discount: parseDiscount(pick(row, ["折扣", "上楼折扣"])),
+    rules: parseFloorFeeRules(ruleText),
+    raw: row
+  };
+}
+
+function parseFloorFeeRules(ruleText) {
+  return clean(ruleText)
+    .split(/\r?\n|；|;/)
+    .map((line) => parseFloorFeeRuleLine(line))
+    .filter(Boolean);
+}
+
+function parseFloorFeeRuleLine(line) {
+  const text = normalizeFloorRuleText(line);
+  if (!text) return null;
+  const anyGte = numberFromMatch(text.match(/任意件[≥>=](\d+(?:\.\d+)?)kg/));
+  const allLt = numberFromMatch(text.match(/(?:所有件|任意件)[＜<](\d+(?:\.\d+)?)kg/));
+  const totalGte = numberFromMatch(text.match(/总计费重量[≥>=](\d+(?:\.\d+)?)kg/));
+  const totalLt = numberFromMatch(text.match(/总计费重量[＜<](\d+(?:\.\d+)?)kg/));
+  const rate = numberFromMatch(text.match(/总计费重量[*×xX](\d+(?:\.\d+)?)/));
+  const unavailable = text.includes("不可上楼");
+  if (!unavailable && rate === null) return null;
+  return {
+    anyGte,
+    allLt,
+    totalGte,
+    totalLt,
+    rate: rate || 0,
+    unavailable,
+    description: clean(line)
+  };
+}
+
+function normalizeFloorRuleText(value) {
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .replace(/公斤/g, "kg")
+    .replace(/ＫＧ/gi, "kg")
+    .replace(/KG/g, "kg")
+    .replace(/≤/g, "<=")
+    .replace(/＞/g, ">")
+    .replace(/＜/g, "<")
+    .trim();
+}
+
+function numberFromMatch(match) {
+  return match ? Number(match[1]) : null;
+}
+
+function parseDiscount(value) {
+  if (value === null || value === undefined || value === "") return 1;
+  const raw = clean(value);
+  const match = raw.replace(/,/g, "").match(/-?\d+(\.\d+)?/);
+  if (!match) return 1;
+  const num = Number(match[0]);
+  if (raw.includes("%") || num > 1) return num / 100;
+  return num;
 }
 
 function parseQuoteSheetName(sheetName) {
@@ -579,6 +669,18 @@ function getSelectedDistrict() {
   return (city?.children || []).find((district) => district.code === els.districtSelect.value) || null;
 }
 
+function updateFloorTypeState() {
+  const needsElevator = clean(els.elevatorSelect.value) === "需上楼";
+  els.floorTypeSelect.disabled = !needsElevator;
+  els.floorTypeSelect.required = needsElevator;
+  if (!needsElevator) els.floorTypeSelect.value = "";
+  if (needsElevator) {
+    els.floorTypeSelect.options[0].textContent = "请选择楼梯类型";
+  } else {
+    els.floorTypeSelect.options[0].textContent = "无需选择";
+  }
+}
+
 function buildManualCustomerAddress() {
   const province = getSelectedProvince();
   const city = getSelectedCity();
@@ -703,6 +805,7 @@ async function runSingleQuery() {
     const result = calculateBestOption({
       origin: els.originSelect.value,
       elevatorService: els.elevatorSelect.value,
+      floorType: els.floorTypeSelect.value,
       address: addressData.address,
       addressError: addressData.error,
       model: product?.model || els.modelInput.value.trim(),
@@ -728,6 +831,7 @@ function validateManualRequiredFields() {
   const checks = [
     { label: "发货地", el: els.originSelect, valid: !!clean(els.originSelect.value) },
     { label: "是否上楼", el: els.elevatorSelect, valid: !!clean(els.elevatorSelect.value) },
+    { label: "楼梯类型", el: els.floorTypeSelect, valid: clean(els.elevatorSelect.value) !== "需上楼" || !!clean(els.floorTypeSelect.value) },
     { label: "省", el: els.provinceSelect, valid: !!clean(els.provinceSelect.value) },
     { label: "市", el: els.citySelect, valid: !!clean(els.citySelect.value) },
     { label: "货品简称", el: els.productShortNameInput, valid: !!clean(els.productShortNameInput.value) },
@@ -794,6 +898,7 @@ async function importBatchFile(file) {
     state.results = rows.map((row) => calculateBestOption({
       origin: pick(row, ["发货地", "供应商简称", "发货仓", "仓库"]) || els.originSelect.value,
       elevatorService: pick(row, ["是否上楼", "上楼服务", "上楼", "需上楼"]) || els.elevatorSelect.value,
+      floorType: pick(row, ["楼梯类型", "上楼类型", "楼梯"]) || els.floorTypeSelect.value,
       address: pick(row, ["顾客地址", "客户地址", "收货地址", "地址"]) || "",
       shortName: pick(row, ["货品简称", "货品名称简称", "货品简名", "简称"]) || "",
       purchaseQty: parsePurchaseQty(pick(row, ["购买件数", "商品购买件数", "件数", "数量"]))
@@ -809,6 +914,7 @@ async function importBatchFile(file) {
 function calculateBestOption(input) {
   const originName = clean(input.origin);
   const elevatorService = clean(input.elevatorService);
+  const floorType = clean(input.floorType);
   const address = clean(input.address);
   const shortName = clean(input.shortName);
   const materialCode = clean(input.materialCode);
@@ -825,6 +931,9 @@ function calculateBestOption(input) {
   }
   if (!elevatorService) {
     return buildResult(input, origin, product, null, [], "是否上楼为必选项。");
+  }
+  if (elevatorService === "需上楼" && !floorType) {
+    return buildResult(input, origin, product, null, [], "楼梯类型为必选项。");
   }
   if (input.addressError) {
     return buildResult(input, origin, product, null, [], input.addressError);
@@ -857,11 +966,23 @@ function calculateBestOption(input) {
       const totalChargeWeight = calculateLogisticsChargeWeight(product, purchaseQty, quote);
       if (!Number.isFinite(totalChargeWeight) || totalChargeWeight <= 0) return null;
       const costDetail = calculateCostDetail(quote, totalChargeWeight);
+      const floorFeeDetail = calculateFloorFeeDetail({
+        quote,
+        product,
+        purchaseQty,
+        totalChargeWeight,
+        elevatorService,
+        floorType
+      });
+      const totalCost = roundMoney(costDetail.total + floorFeeDetail.fee);
       return {
         quote,
         match: addressMatch,
         totalChargeWeight,
-        cost: costDetail.total,
+        baseCost: costDetail.total,
+        floorFee: floorFeeDetail.fee,
+        floorFeeDetail,
+        cost: totalCost,
         costDetail
       };
     })
@@ -1075,6 +1196,101 @@ function calculateCost(quote, weight) {
   return calculateCostDetail(quote, weight).total;
 }
 
+function calculateFloorFeeDetail({ quote, product, totalChargeWeight, elevatorService, floorType }) {
+  const detail = {
+    service: elevatorService || "",
+    floorType: floorType || "",
+    status: elevatorService === "需上楼" ? "需上楼" : "无需上楼",
+    fee: 0,
+    displayFee: "0",
+    discount: 1,
+    rate: 0,
+    lines: [],
+    childWeights: [],
+    message: ""
+  };
+  if (elevatorService !== "需上楼") {
+    detail.lines.push({ label: "上楼服务", formula: "无需上楼", amount: Number.NaN });
+    return detail;
+  }
+  const floorRule = findFloorFeeRule(quote.carrier, floorType);
+  if (!floorRule) {
+    detail.status = "上楼费规则缺失，未计入上楼费";
+    detail.displayFee = "未计入";
+    detail.message = detail.status;
+    detail.lines.push({ label: "上楼费", formula: `未找到 ${quote.carrier || "-"} / ${floorType || "-"} 的上楼收费规则`, amount: Number.NaN });
+    return detail;
+  }
+  detail.discount = floorRule.discount;
+  detail.childWeights = calculatePackageFloorWeights(product, quote);
+  if (!detail.childWeights.length) {
+    detail.status = "子包裹体积缺失，未计入上楼费";
+    detail.displayFee = "未计入";
+    detail.message = detail.status;
+    detail.lines.push({ label: "上楼费", formula: "缺少体积1、体积2等子包裹体积", amount: Number.NaN });
+    return detail;
+  }
+  const matched = matchFloorFeeRule(floorRule.rules, detail.childWeights, totalChargeWeight);
+  if (!matched) {
+    detail.status = "上楼费规则无法识别，未计入上楼费";
+    detail.displayFee = "未计入";
+    detail.message = detail.status;
+    detail.lines.push({ label: "上楼费", formula: `规则无法识别：${floorRule.ruleText}`, amount: Number.NaN });
+    return detail;
+  }
+  if (matched.unavailable) {
+    detail.status = "可发货但不可上楼";
+    detail.displayFee = "不可上楼";
+    detail.message = detail.status;
+    detail.lines.push({ label: "上楼状态", formula: matched.description || "规则命中不可上楼", amount: Number.NaN });
+    return detail;
+  }
+  const fee = roundMoney(totalChargeWeight * matched.rate * floorRule.discount);
+  detail.rate = matched.rate;
+  detail.fee = fee;
+  detail.displayFee = formatMoney(fee);
+  detail.status = "可上楼";
+  detail.lines.push({
+    label: "上楼费",
+    formula: `${formatNumber(totalChargeWeight)}kg × ${formatNumber(matched.rate)} 元/kg × ${formatPercent(floorRule.discount)}`,
+    amount: fee
+  });
+  return detail;
+}
+
+function findFloorFeeRule(carrier, floorType) {
+  if (!carrier || !floorType) return null;
+  return state.floorFees.find((item) => sameText(item.carrier, carrier) && sameText(item.floorType, floorType)) || null;
+}
+
+function calculatePackageFloorWeights(product, quote) {
+  const bubbleRatio = quote?.bubbleRatio || 0;
+  if (!bubbleRatio) return [];
+  return (product?.packages || [])
+    .map((pkg) => ({
+      index: pkg.index,
+      volume: pkg.volume || 0,
+      weight: pkg.volume ? roundWeight(pkg.volume / bubbleRatio) : 0
+    }))
+    .filter((item) => item.weight > 0);
+}
+
+function matchFloorFeeRule(rules, childWeights, totalChargeWeight) {
+  for (const rule of rules || []) {
+    if (floorRuleMatches(rule, childWeights, totalChargeWeight)) return rule;
+  }
+  return null;
+}
+
+function floorRuleMatches(rule, childWeights, totalChargeWeight) {
+  const weights = childWeights.map((item) => item.weight);
+  if (rule.anyGte !== null && !weights.some((weight) => weight >= rule.anyGte)) return false;
+  if (rule.allLt !== null && !weights.every((weight) => weight < rule.allLt)) return false;
+  if (rule.totalGte !== null && !(totalChargeWeight >= rule.totalGte)) return false;
+  if (rule.totalLt !== null && !(totalChargeWeight < rule.totalLt)) return false;
+  return true;
+}
+
 function buildResult(input, origin, product, best, candidates, message) {
   const purchaseQty = parsePurchaseQty(input.purchaseQty);
   const singleWeight = product?.singleWeight || 0;
@@ -1085,11 +1301,13 @@ function buildResult(input, origin, product, best, candidates, message) {
   const alternatives = best
     ? candidates.filter((item) => item !== best)
     : candidates;
+  const floorFeeDetail = best?.floorFeeDetail || null;
   const totalVolume = product?.totalVolume || 0;
   const purchasedVolume = product ? roundWeight(totalVolume * purchaseQty) : 0;
   return {
     origin: clean(input.origin),
     elevatorService: clean(input.elevatorService),
+    floorType: clean(input.floorType),
     quoteZone: origin?.quoteZone || normalizeQuoteZone(input.origin) || "",
     address: clean(input.address),
     shortName: product?.shortName || clean(input.shortName),
@@ -1103,12 +1321,16 @@ function buildResult(input, origin, product, best, candidates, message) {
     totalActualWeight,
     singleChargeWeight,
     totalChargeWeight,
+    baseCost: best ? best.baseCost : "",
+    floorStatus: floorFeeDetail?.status || "",
+    floorFee: best ? floorFeeDetail?.fee || 0 : "",
+    floorFeeDisplay: best ? floorFeeDetail?.displayFee || "0" : "",
     carrier: quote.carrier || "",
     cost: best ? best.cost : "",
     region: best?.match?.label || "",
     candidateCount: candidates.length,
     backupCarriers: alternatives.map((item) => item.quote.carrier).join("、"),
-    backupCosts: alternatives.map((item) => item.cost).join("、"),
+    backupCosts: alternatives.map(formatBackupCost).join("；"),
     calculationDetails: candidates.map((item) => buildCalculationDetail({
       item,
       isBest: item === best,
@@ -1123,6 +1345,7 @@ function buildResult(input, origin, product, best, candidates, message) {
 
 function buildCalculationDetail({ item, isBest, product, purchaseQty, totalVolume, purchasedVolume }) {
   const quote = item.quote || {};
+  const floorDetail = item.floorFeeDetail || {};
   return {
     carrier: quote.carrier || "",
     role: isBest ? "推荐物流" : "备选物流",
@@ -1133,17 +1356,32 @@ function buildCalculationDetail({ item, isBest, product, purchaseQty, totalVolum
     singleVolume: totalVolume || 0,
     purchasedVolume,
     chargeWeight: item.totalChargeWeight,
+    baseCost: item.baseCost,
+    floorFee: item.floorFee,
+    floorFeeDisplay: floorDetail.displayFee || "0",
+    floorStatus: floorDetail.status || "",
+    floorPackageWeights: floorDetail.childWeights || [],
     cost: item.cost,
     costLines: item.costDetail?.lines || [],
+    floorLines: floorDetail.lines || [],
     formula: quote.bubbleRatio
       ? `${formatNumber(totalVolume)} × ${purchaseQty} ÷ ${formatNumber(quote.bubbleRatio)} = ${formatNumber(item.totalChargeWeight)}kg`
       : `${formatNumber(product?.singleChargeWeight || 0)} × ${purchaseQty} = ${formatNumber(item.totalChargeWeight)}kg`
   };
 }
 
+function formatBackupCost(item) {
+  return `${item.quote.carrier}：总费用${formatMoney(item.cost)}，基础费用${formatMoney(item.baseCost)}，上楼费用${item.floorFeeDetail?.displayFee || formatMoney(item.floorFee || 0)}`;
+}
+
+function formatFloorPackageWeights(weights) {
+  if (!weights?.length) return "-";
+  return weights.map((item) => `体积${item.index}:${formatNumber(item.weight)}kg`).join("；");
+}
+
 function renderResults() {
   if (!state.results.length) {
-    els.resultBody.innerHTML = `<tr><td colspan="15" class="empty">暂无查询结果</td></tr>`;
+    els.resultBody.innerHTML = `<tr><td colspan="20" class="empty">暂无查询结果</td></tr>`;
     renderCalculationSelector();
     els.exportResults.disabled = true;
     return;
@@ -1161,6 +1399,11 @@ function renderResults() {
       <td>${escapeHtml(row.totalActualWeight)}</td>
       <td>${escapeHtml(row.totalChargeWeight)}</td>
       <td>${escapeHtml(row.origin)}</td>
+      <td>${escapeHtml(row.elevatorService)}</td>
+      <td>${escapeHtml(row.floorType || "-")}</td>
+      <td>${row.baseCost === "" ? "未匹配" : escapeHtml(row.baseCost)}</td>
+      <td>${escapeHtml(row.floorStatus || "-")}</td>
+      <td>${escapeHtml(row.floorFeeDisplay || "")}</td>
       <td>${escapeHtml(row.carrier || "未匹配")}</td>
       <td>${row.cost === "" ? "未匹配" : escapeHtml(row.cost)}</td>
       <td>${escapeHtml(row.backupCarriers)}</td>
@@ -1181,6 +1424,7 @@ function clearQueryInfo() {
   els.pastedAddressInput.value = "";
   els.originSelect.value = "";
   els.elevatorSelect.value = "";
+  updateFloorTypeState();
   els.provinceSelect.value = "";
   renderCityOptions();
   renderDistrictOptions();
@@ -1241,7 +1485,7 @@ function renderCalculationDetails(row, index) {
     <div class="calculation-item ${detail.role === "推荐物流" ? "is-best" : ""}">
       <div class="calculation-title">
         <strong>${escapeHtml(detail.role)}：${escapeHtml(detail.carrier)}</strong>
-        <span>费用 ${escapeHtml(formatMoney(detail.cost))} 元</span>
+        <span>总费用 ${escapeHtml(formatMoney(detail.cost))} 元</span>
       </div>
       <div class="calculation-grid">
         <span>报价 Sheet：${escapeHtml(detail.sheetName || "-")}</span>
@@ -1251,12 +1495,19 @@ function renderCalculationDetails(row, index) {
         <span>购买总体积：${escapeHtml(formatNumber(detail.purchasedVolume))}</span>
         <span>泡比：${escapeHtml(formatNumber(detail.bubbleRatio))}</span>
         <span>计费重量：${escapeHtml(detail.formula)}</span>
+        <span>子包裹判断重量：${escapeHtml(formatFloorPackageWeights(detail.floorPackageWeights))}</span>
+        <span>上楼状态：${escapeHtml(detail.floorStatus || "-")}</span>
       </div>
       <div class="calculation-steps">
         ${detail.costLines.map((line) => `
           <span>${escapeHtml(line.label)}：${escapeHtml(line.formula)} = ${escapeHtml(formatMoney(line.amount))} 元</span>
         `).join("")}
-        <strong>合计：${escapeHtml(formatMoney(detail.cost))} 元</strong>
+        <strong>基础费用：${escapeHtml(formatMoney(detail.baseCost))} 元</strong>
+        ${detail.floorLines.map((line) => `
+          <span>${escapeHtml(line.label)}：${escapeHtml(line.formula)}${Number.isFinite(Number(line.amount)) ? ` = ${escapeHtml(formatMoney(line.amount))} 元` : ""}</span>
+        `).join("")}
+        <strong>上楼费用：${escapeHtml(detail.floorFeeDisplay || formatMoney(detail.floorFee || 0))}</strong>
+        <strong>总费用：${escapeHtml(formatMoney(detail.cost))} 元</strong>
       </div>
     </div>
   `).join("");
@@ -1269,9 +1520,9 @@ function downloadBatchTemplate() {
     toast("发货地选项为空，请先在维度表库上传并应用发货地址。");
   }
   const templateRows = [
-    ["顾客地址", "货品简称", "购买件数", "发货地"],
-    ["浙江省杭州市余杭区示例路1号", "示例货品A", 1, ""],
-    ["江苏省南京市建邺区示例路2号", "示例货品B", 2, ""]
+    ["顾客地址", "货品简称", "购买件数", "发货地", "是否上楼", "楼梯类型"],
+    ["浙江省杭州市余杭区示例路1号", "示例货品A", 1, "", "无需上楼", ""],
+    ["江苏省南京市建邺区示例路2号", "示例货品B", 2, "", "需上楼", "电梯"]
   ];
   const workbookBytes = createBatchTemplateWorkbook(templateRows, originNames);
   downloadBinaryFile("物流地址查询导入模板.xlsx", workbookBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -1348,14 +1599,20 @@ function buildTemplateSheetXml(rows, optionCount) {
   }).join("");
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <dimension ref="A1:D501"/>
+  <dimension ref="A1:F501"/>
   <sheetViews><sheetView workbookViewId="0"/></sheetViews>
   <sheetFormatPr defaultRowHeight="18"/>
-  <cols><col min="1" max="1" width="36" customWidth="1"/><col min="2" max="2" width="18" customWidth="1"/><col min="3" max="3" width="12" customWidth="1"/><col min="4" max="4" width="22" customWidth="1"/></cols>
+  <cols><col min="1" max="1" width="36" customWidth="1"/><col min="2" max="2" width="18" customWidth="1"/><col min="3" max="3" width="12" customWidth="1"/><col min="4" max="4" width="22" customWidth="1"/><col min="5" max="5" width="14" customWidth="1"/><col min="6" max="6" width="14" customWidth="1"/></cols>
   <sheetData>${sheetRows}</sheetData>
-  <dataValidations count="1">
+  <dataValidations count="3">
     <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="D2:D501">
       <formula1>'发货地选项'!$A$1:$A$${optionCount}</formula1>
+    </dataValidation>
+    <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="E2:E501">
+      <formula1>"需上楼,无需上楼"</formula1>
+    </dataValidation>
+    <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="F2:F501">
+      <formula1>"电梯,步行梯"</formula1>
     </dataValidation>
   </dataValidations>
 </worksheet>`;
@@ -1511,6 +1768,11 @@ function exportResults() {
     总实际重量: row.totalActualWeight,
     总推荐物流计费重量: row.totalChargeWeight,
     发货地: row.origin,
+    是否上楼: row.elevatorService,
+    楼梯类型: row.floorType,
+    基础费用: row.baseCost,
+    上楼状态: row.floorStatus,
+    上楼费用: row.floorFeeDisplay,
     推荐物流: row.carrier,
     预估费用: row.cost,
     备选物流: row.backupCarriers,
@@ -1612,6 +1874,12 @@ function formatMoney(value) {
   return (Math.round(num * 100) / 100).toFixed(2).replace(/\.00$/, "");
 }
 
+function formatPercent(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "100%";
+  return `${formatNumber(num * 100)}%`;
+}
+
 function formatCalculationDetailsForExport(row) {
   if (!row.calculationDetails?.length) return row.message || "";
   return row.calculationDetails.map((detail) => {
@@ -1620,8 +1888,13 @@ function formatCalculationDetailsForExport(row) {
       `报价Sheet：${detail.sheetName || "-"}`,
       `匹配区域：${detail.matchedRegion || "-"}`,
       `计费重量：${detail.formula}`,
+      `子包裹判断重量：${formatFloorPackageWeights(detail.floorPackageWeights)}`,
       ...(detail.costLines || []).map((line) => `${line.label}：${line.formula} = ${formatMoney(line.amount)}元`),
-      `合计：${formatMoney(detail.cost)}元`
+      `基础费用：${formatMoney(detail.baseCost)}元`,
+      `上楼状态：${detail.floorStatus || "-"}`,
+      ...(detail.floorLines || []).map((line) => `${line.label}：${line.formula}${Number.isFinite(Number(line.amount)) ? ` = ${formatMoney(line.amount)}元` : ""}`),
+      `上楼费用：${detail.floorFeeDisplay || formatMoney(detail.floorFee || 0)}`,
+      `总费用：${formatMoney(detail.cost)}元`
     ];
     return lines.join("；");
   }).join("\n");
