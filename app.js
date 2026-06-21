@@ -31,6 +31,9 @@ const els = {
   salesSeriesInput: document.getElementById("salesSeriesInput"),
   quantityInput: document.getElementById("quantityInput"),
   runQuery: document.getElementById("runQuery"),
+  queryProgress: document.getElementById("queryProgress"),
+  queryProgressText: document.getElementById("queryProgressText"),
+  queryProgressBar: document.getElementById("queryProgressBar"),
   reloadLibrary: document.getElementById("reloadLibrary"),
   resultBody: document.getElementById("resultBody"),
   resultHint: document.getElementById("resultHint"),
@@ -614,21 +617,48 @@ function updateProductInfoFields() {
   return info;
 }
 
-function runSingleQuery() {
-  const productInfo = updateProductInfoFields();
-  const addressData = buildManualCustomerAddress();
-  const result = calculateBestOption({
-    origin: els.originSelect.value,
-    address: addressData.address,
-    addressError: addressData.error,
-    model: productInfo?.model || els.modelInput.value.trim(),
-    materialCode: els.materialCodeInput.value.trim(),
-    salesProductLine: productInfo?.salesProductLine || els.salesProductLineInput.value.trim(),
-    salesSeries: productInfo?.salesSeries || els.salesSeriesInput.value.trim(),
-    purchaseQty: parsePurchaseQty(els.quantityInput.value)
-  });
-  state.results = [result];
-  renderResults();
+async function runSingleQuery() {
+  if (els.runQuery.disabled) return;
+  els.runQuery.disabled = true;
+  setQueryProgress("正在准备查询...", 20, "loading");
+  try {
+    await nextFrame();
+    const productInfo = updateProductInfoFields();
+    const addressData = buildManualCustomerAddress();
+    setQueryProgress("正在匹配商品、地址和报价...", 65, "loading");
+    await nextFrame();
+    const result = calculateBestOption({
+      origin: els.originSelect.value,
+      address: addressData.address,
+      addressError: addressData.error,
+      model: productInfo?.model || els.modelInput.value.trim(),
+      materialCode: els.materialCodeInput.value.trim(),
+      salesProductLine: productInfo?.salesProductLine || els.salesProductLineInput.value.trim(),
+      salesSeries: productInfo?.salesSeries || els.salesSeriesInput.value.trim(),
+      purchaseQty: parsePurchaseQty(els.quantityInput.value)
+    });
+    state.results = [result];
+    renderResults();
+    setQueryProgress(result.failureReason ? "查询完成，请查看失败原因。" : "查询完成。", 100, result.failureReason ? "warning" : "done");
+  } catch (error) {
+    console.error(error);
+    setQueryProgress(error.message || "查询失败，请检查维度表。", 100, "error");
+    toast(error.message || "查询失败");
+  } finally {
+    els.runQuery.disabled = false;
+  }
+}
+
+function nextFrame() {
+  return new Promise((resolve) => requestAnimationFrame(resolve));
+}
+
+function setQueryProgress(message, percent, status = "loading") {
+  if (!els.queryProgress) return;
+  els.queryProgress.hidden = false;
+  els.queryProgress.dataset.status = status;
+  els.queryProgressText.textContent = message;
+  els.queryProgressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
 }
 
 async function importBatchFile(file) {

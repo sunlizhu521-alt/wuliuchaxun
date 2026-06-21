@@ -192,7 +192,7 @@ select {
 }
 
 .material-toolbar {
-  grid-template-columns: 86px minmax(150px, 1.15fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(140px, 1fr) 112px auto;
+  grid-template-columns: 86px minmax(150px, 1.15fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(140px, 1fr) 112px auto minmax(180px, 220px);
 }
 
 .toolbar-title {
@@ -222,6 +222,45 @@ select {
   padding: 0 10px;
   background: #fff;
   color: var(--text);
+}
+
+.query-progress {
+  display: grid;
+  gap: 6px;
+  align-self: end;
+  min-width: 180px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.query-progress[hidden] {
+  display: none;
+}
+
+.query-progress-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5ebf3;
+}
+
+.query-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width .18s ease, background .18s ease;
+}
+
+.query-progress[data-status="done"] .query-progress-bar {
+  background: #14805e;
+}
+
+.query-progress[data-status="warning"] .query-progress-bar {
+  background: #c77700;
+}
+
+.query-progress[data-status="error"] .query-progress-bar {
+  background: #c0362c;
 }
 
 .panel {

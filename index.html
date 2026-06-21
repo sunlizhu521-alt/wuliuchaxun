@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>物流查询系统</title>
-  <link rel="stylesheet" href="styles.css?v=20260647">
+  <link rel="stylesheet" href="styles.css?v=20260648">
 </head>
 <body>
   <div class="app-shell">
@@ -88,6 +88,12 @@
           <input id="quantityInput" type="number" min="1" step="1" value="1">
         </label>
         <button class="button primary" id="runQuery">查询最优物流</button>
+        <div class="query-progress" id="queryProgress" role="status" aria-live="polite" hidden>
+          <span id="queryProgressText">等待查询</span>
+          <div class="query-progress-track">
+            <div id="queryProgressBar" class="query-progress-bar" style="width: 0%"></div>
+          </div>
+        </div>
       </section>
 
       <section class="panel">
@@ -120,7 +126,7 @@
               </tr>
             </thead>
             <tbody id="resultBody">
-              <tr><td colspan="14" class="empty">暂无查询结果</td></tr>
+              <tr><td colspan="15" class="empty">暂无查询结果</td></tr>
             </tbody>
           </table>
         </div>
@@ -163,6 +169,6 @@
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="shared-library.js?v=20260623"></script>
   <script src="china-regions.js?v=20260632"></script>
-  <script src="app.js?v=20260647"></script>
+  <script src="app.js?v=20260648"></script>
 </body>
 </html>
