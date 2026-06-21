@@ -75,8 +75,6 @@ function bindEvents() {
   els.citySelect.addEventListener("change", renderDistrictOptions);
   els.productShortNameInput.addEventListener("input", updateProductInfoFields);
   els.productShortNameInput.addEventListener("change", updateProductInfoFields);
-  els.materialCodeInput.addEventListener("input", updateProductInfoFields);
-  els.materialCodeInput.addEventListener("change", updateProductInfoFields);
   els.calculationSelect.addEventListener("change", () => renderSelectedCalculationDetail());
   els.exportResults.addEventListener("click", exportResults);
   els.downloadTemplate.addEventListener("click", downloadBatchTemplate);
@@ -658,10 +656,10 @@ function parsePastedAddress(address) {
 
 function updateProductInfoFields() {
   const match = findProductMatch({
-    shortName: els.productShortNameInput.value,
-    materialCode: els.materialCodeInput.value
+    shortName: els.productShortNameInput.value
   });
   const product = match.product;
+  els.materialCodeInput.value = product?.materialCode || "";
   els.salesProductLineInput.value = product?.salesProductLine || "";
   els.salesSeriesInput.value = product?.salesSeries || "";
   els.modelInput.value = product?.model || "";
@@ -692,7 +690,7 @@ async function runSingleQuery() {
       addressError: addressData.error,
       model: product?.model || els.modelInput.value.trim(),
       shortName: els.productShortNameInput.value.trim(),
-      materialCode: els.materialCodeInput.value.trim(),
+      materialCode: product?.materialCode || els.materialCodeInput.value.trim(),
       salesProductLine: product?.salesProductLine || els.salesProductLineInput.value.trim(),
       salesSeries: product?.salesSeries || els.salesSeriesInput.value.trim(),
       purchaseQty: parsePurchaseQty(els.quantityInput.value)
