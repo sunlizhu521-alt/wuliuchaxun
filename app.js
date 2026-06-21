@@ -712,9 +712,10 @@ function setQueryProgress(message, percent, status = "loading") {
 
 function setLibraryProgress(message, percent, status = "loading") {
   if (!els.libraryProgress) return;
+  const safePercent = Math.max(0, Math.min(100, percent));
   els.libraryProgress.dataset.status = status;
-  els.libraryProgressText.textContent = message;
-  els.libraryProgressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+  els.libraryProgressText.textContent = `${message} ${safePercent}%`;
+  els.libraryProgressBar.style.width = `${safePercent}%`;
 }
 
 function getMissingLibraryParts() {
