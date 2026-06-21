@@ -1729,9 +1729,9 @@ function downloadBatchTemplate() {
     toast("发货地选项为空，请先在维度表库上传并应用发货地址。");
   }
   const templateRows = [
-    ["顾客地址", "货品简称", "购买件数", "发货地", "是否上楼", "楼梯类型"],
-    ["浙江省杭州市余杭区示例路1号", "示例货品A", 1, "", "无需上楼", ""],
-    ["江苏省南京市建邺区示例路2号", "示例货品B", 2, "", "需上楼", "电梯"]
+    ["订单号", "原始单号", "店铺", "仓库", "客服备注", "顾客地址", "货品简称", "是否上楼", "楼梯类型", "购买件数", "发货地"],
+    ["", "", "", "", "", "", "示例货品A", "无需上楼", "", 1, ""],
+    ["", "", "", "", "", "", "示例货品B", "需上楼", "电梯", 2, ""]
   ];
   const workbookBytes = createBatchTemplateWorkbook(templateRows, originNames);
   downloadBinaryFile("物流地址查询导入模板.xlsx", workbookBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -1808,20 +1808,20 @@ function buildTemplateSheetXml(rows, optionCount) {
   }).join("");
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <dimension ref="A1:F501"/>
+  <dimension ref="A1:K501"/>
   <sheetViews><sheetView workbookViewId="0"/></sheetViews>
   <sheetFormatPr defaultRowHeight="18"/>
-  <cols><col min="1" max="1" width="36" customWidth="1"/><col min="2" max="2" width="18" customWidth="1"/><col min="3" max="3" width="12" customWidth="1"/><col min="4" max="4" width="22" customWidth="1"/><col min="5" max="5" width="14" customWidth="1"/><col min="6" max="6" width="14" customWidth="1"/></cols>
+  <cols><col min="1" max="1" width="9" customWidth="1"/><col min="6" max="6" width="9" customWidth="1"/><col min="7" max="7" width="18" customWidth="1"/><col min="8" max="8" width="14" customWidth="1"/><col min="10" max="10" width="12" customWidth="1"/><col min="11" max="11" width="22" customWidth="1"/></cols>
   <sheetData>${sheetRows}</sheetData>
   <dataValidations count="3">
-    <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="D2:D501">
-      <formula1>'发货地选项'!$A$1:$A$${optionCount}</formula1>
-    </dataValidation>
-    <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="E2:E501">
+    <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="H2:H501">
       <formula1>"需上楼,无需上楼"</formula1>
     </dataValidation>
-    <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="F2:F501">
+    <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="I2:I501">
       <formula1>"电梯,步行梯"</formula1>
+    </dataValidation>
+    <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="K2:K501">
+      <formula1>发货地选项!$A$1:$A$${optionCount}</formula1>
     </dataValidation>
   </dataValidations>
 </worksheet>`;
