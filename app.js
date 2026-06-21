@@ -755,7 +755,6 @@ async function importBatchFile(file) {
       origin: pick(row, ["发货地", "供应商简称", "发货仓", "仓库"]) || els.originSelect.value,
       address: pick(row, ["顾客地址", "客户地址", "收货地址", "地址"]) || "",
       shortName: pick(row, ["货品简称", "货品名称简称", "货品简名", "简称"]) || "",
-      materialCode: pick(row, ["物料编码", "物料代码", "商品编码", "产品编码", "存货编码"]) || "",
       purchaseQty: parsePurchaseQty(pick(row, ["购买件数", "商品购买件数", "件数", "数量"]))
     }));
     renderResults();
@@ -1201,9 +1200,9 @@ function downloadBatchTemplate() {
     toast("发货地选项为空，请先在维度表库上传并应用发货地址。");
   }
   const templateRows = [
-    ["顾客地址", "货品简称", "物料编码", "购买件数", "发货地"],
-    ["浙江省杭州市余杭区示例路1号", "示例货品A", "MAT-A100", 1, ""],
-    ["江苏省南京市建邺区示例路2号", "示例货品B", "MAT-B200", 2, ""]
+    ["顾客地址", "货品简称", "购买件数", "发货地"],
+    ["浙江省杭州市余杭区示例路1号", "示例货品A", 1, ""],
+    ["江苏省南京市建邺区示例路2号", "示例货品B", 2, ""]
   ];
   const workbookBytes = createBatchTemplateWorkbook(templateRows, originNames);
   downloadBinaryFile("物流地址查询导入模板.xlsx", workbookBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -1280,13 +1279,13 @@ function buildTemplateSheetXml(rows, optionCount) {
   }).join("");
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <dimension ref="A1:E501"/>
+  <dimension ref="A1:D501"/>
   <sheetViews><sheetView workbookViewId="0"/></sheetViews>
   <sheetFormatPr defaultRowHeight="18"/>
-  <cols><col min="1" max="1" width="36" customWidth="1"/><col min="2" max="2" width="18" customWidth="1"/><col min="3" max="3" width="18" customWidth="1"/><col min="4" max="4" width="12" customWidth="1"/><col min="5" max="5" width="22" customWidth="1"/></cols>
+  <cols><col min="1" max="1" width="36" customWidth="1"/><col min="2" max="2" width="18" customWidth="1"/><col min="3" max="3" width="12" customWidth="1"/><col min="4" max="4" width="22" customWidth="1"/></cols>
   <sheetData>${sheetRows}</sheetData>
   <dataValidations count="1">
-    <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="E2:E501">
+    <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="D2:D501">
       <formula1>'发货地选项'!$A$1:$A$${optionCount}</formula1>
     </dataValidation>
   </dataValidations>
