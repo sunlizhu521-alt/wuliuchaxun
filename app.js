@@ -1210,7 +1210,7 @@ function calculateFloorFeeDetail({ quote, product, totalChargeWeight, elevatorSe
     message: ""
   };
   if (elevatorService !== "需上楼") {
-    detail.lines.push({ label: "上楼服务", formula: "无需上楼", amount: Number.NaN });
+    detail.lines.push({ label: "上楼服务", formula: "无需上楼，上楼费用=0", amount: Number.NaN });
     return detail;
   }
   const floorRule = findFloorFeeRule(quote.carrier, floorType);
@@ -1223,6 +1223,8 @@ function calculateFloorFeeDetail({ quote, product, totalChargeWeight, elevatorSe
   }
   detail.discount = floorRule.discount;
   detail.childWeights = calculatePackageFloorWeights(product, quote);
+  detail.lines.push({ label: "上楼收费规则", formula: `${floorRule.carrier}/${floorRule.floorType}：${floorRule.ruleText}`, amount: Number.NaN });
+  detail.lines.push({ label: "子包裹判断重量", formula: formatFloorPackageWeightDetails(detail.childWeights), amount: Number.NaN });
   if (!detail.childWeights.length) {
     detail.status = "子包裹体积缺失，未计入上楼费";
     detail.displayFee = "未计入";
@@ -1235,14 +1237,15 @@ function calculateFloorFeeDetail({ quote, product, totalChargeWeight, elevatorSe
     detail.status = "上楼费规则无法识别，未计入上楼费";
     detail.displayFee = "未计入";
     detail.message = detail.status;
-    detail.lines.push({ label: "上楼费", formula: `规则无法识别：${floorRule.ruleText}`, amount: Number.NaN });
+    detail.lines.push({ label: "上楼规则命中", formula: `未命中可识别规则，未计入上楼费`, amount: Number.NaN });
     return detail;
   }
+  detail.lines.push({ label: "上楼规则命中", formula: matched.description || "命中上楼收费规则", amount: Number.NaN });
   if (matched.unavailable) {
     detail.status = "可发货但不可上楼";
     detail.displayFee = "不可上楼";
     detail.message = detail.status;
-    detail.lines.push({ label: "上楼状态", formula: matched.description || "规则命中不可上楼", amount: Number.NaN });
+    detail.lines.push({ label: "上楼状态", formula: "可发货但不可上楼，上楼费用不计入总费用", amount: Number.NaN });
     return detail;
   }
   const fee = roundMoney(totalChargeWeight * matched.rate * floorRule.discount);
@@ -1252,7 +1255,7 @@ function calculateFloorFeeDetail({ quote, product, totalChargeWeight, elevatorSe
   detail.status = "可上楼";
   detail.lines.push({
     label: "上楼费",
-    formula: `${formatNumber(totalChargeWeight)}kg × ${formatNumber(matched.rate)} 元/kg × ${formatPercent(floorRule.discount)}`,
+    formula: `整单总计费重量 ${formatNumber(totalChargeWeight)}kg × ${formatNumber(matched.rate)} 元/kg × 折扣 ${formatPercent(floorRule.discount)}`,
     amount: fee
   });
   return detail;
@@ -1270,6 +1273,7 @@ function calculatePackageFloorWeights(product, quote) {
     .map((pkg) => ({
       index: pkg.index,
       volume: pkg.volume || 0,
+      bubbleRatio,
       weight: pkg.volume ? roundWeight(pkg.volume / bubbleRatio) : 0
     }))
     .filter((item) => item.weight > 0);
@@ -1377,6 +1381,13 @@ function formatBackupCost(item) {
 function formatFloorPackageWeights(weights) {
   if (!weights?.length) return "-";
   return weights.map((item) => `体积${item.index}:${formatNumber(item.weight)}kg`).join("；");
+}
+
+function formatFloorPackageWeightDetails(weights) {
+  if (!weights?.length) return "无子包裹体积";
+  return weights.map((item) => (
+    `体积${item.index} ${formatNumber(item.volume)} ÷ 泡比 ${formatNumber(item.bubbleRatio)} = ${formatNumber(item.weight)}kg`
+  )).join("；");
 }
 
 function renderResults() {
@@ -1495,7 +1506,7 @@ function renderCalculationDetails(row, index) {
         <span>购买总体积：${escapeHtml(formatNumber(detail.purchasedVolume))}</span>
         <span>泡比：${escapeHtml(formatNumber(detail.bubbleRatio))}</span>
         <span>计费重量：${escapeHtml(detail.formula)}</span>
-        <span>子包裹判断重量：${escapeHtml(formatFloorPackageWeights(detail.floorPackageWeights))}</span>
+        <span>子包裹判断重量：${escapeHtml(formatFloorPackageWeightDetails(detail.floorPackageWeights))}</span>
         <span>上楼状态：${escapeHtml(detail.floorStatus || "-")}</span>
       </div>
       <div class="calculation-steps">
@@ -1888,7 +1899,7 @@ function formatCalculationDetailsForExport(row) {
       `报价Sheet：${detail.sheetName || "-"}`,
       `匹配区域：${detail.matchedRegion || "-"}`,
       `计费重量：${detail.formula}`,
-      `子包裹判断重量：${formatFloorPackageWeights(detail.floorPackageWeights)}`,
+      `子包裹判断重量：${formatFloorPackageWeightDetails(detail.floorPackageWeights)}`,
       ...(detail.costLines || []).map((line) => `${line.label}：${line.formula} = ${formatMoney(line.amount)}元`),
       `基础费用：${formatMoney(detail.baseCost)}元`,
       `上楼状态：${detail.floorStatus || "-"}`,
