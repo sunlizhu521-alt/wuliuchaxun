@@ -16,6 +16,7 @@ const state = {
   floorFees: [],
   origins: [],
   results: [],
+  batchImportHeaders: [],
   libraryLoading: false,
   libraryReady: false
 };
@@ -894,15 +895,26 @@ async function importBatchFile(file) {
   try {
     const workbook = readWorkbook(file.name, await file.arrayBuffer());
     const sheetName = workbook.SheetNames[0];
-    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "", raw: false });
-    state.results = rows.map((row) => calculateBestOption({
-      origin: pick(row, ["发货地", "供应商简称", "发货仓", "仓库"]) || els.originSelect.value,
-      elevatorService: pick(row, ["是否上楼", "上楼服务", "上楼", "需上楼"]) || els.elevatorSelect.value,
-      floorType: pick(row, ["楼梯类型", "上楼类型", "楼梯"]) || els.floorTypeSelect.value,
-      address: pick(row, ["顾客地址", "客户地址", "收货地址", "地址"]) || "",
-      shortName: pick(row, ["货品简称", "货品名称简称", "货品简名", "简称"]) || "",
-      purchaseQty: parsePurchaseQty(pick(row, ["购买件数", "商品购买件数", "件数", "数量"]))
-    }));
+    const worksheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(worksheet, { defval: "", raw: false });
+    const headers = getWorksheetHeaders(worksheet);
+    state.batchImportHeaders = headers;
+    state.results = rows.map((row, index) => {
+      const result = calculateBestOption({
+        origin: pick(row, ["发货地", "供应商简称", "发货仓", "仓库"]) || els.originSelect.value,
+        elevatorService: pick(row, ["是否上楼", "上楼服务", "上楼", "需上楼"]) || els.elevatorSelect.value,
+        floorType: pick(row, ["楼梯类型", "上楼类型", "楼梯"]) || els.floorTypeSelect.value,
+        address: pick(row, ["顾客地址", "客户地址", "收货地址", "地址"]) || "",
+        shortName: pick(row, ["货品简称", "货品名称简称", "货品简名", "简称"]) || "",
+        purchaseQty: parsePurchaseQty(pick(row, ["购买件数", "商品购买件数", "件数", "数量"]))
+      });
+      result.importSource = {
+        rowNumber: index + 2,
+        headers,
+        row: buildImportSourceRow(row, headers)
+      };
+      return result;
+    });
     renderResults();
     toast(`已导入 ${state.results.length} 条地址查询。`);
   } catch (error) {
@@ -999,6 +1011,25 @@ function calculateBestOption(input) {
 
 function findOrigin(originName) {
   return state.origins.find((item) => sameText(item.name, originName)) || null;
+}
+
+function getWorksheetHeaders(worksheet) {
+  if (!worksheet?.["!ref"]) return [];
+  const range = XLSX.utils.decode_range(worksheet["!ref"]);
+  const headers = [];
+  for (let column = range.s.c; column <= range.e.c; column += 1) {
+    const cell = worksheet[XLSX.utils.encode_cell({ r: range.s.r, c: column })];
+    const header = clean(cell?.v ?? cell?.w ?? "");
+    if (header) headers.push(header);
+  }
+  return headers;
+}
+
+function buildImportSourceRow(row, headers) {
+  return headers.reduce((output, header) => {
+    output[header] = row?.[header] ?? "";
+    return output;
+  }, {});
 }
 
 function matchesQuoteOrigin(quote, originName) {
@@ -1432,6 +1463,7 @@ function renderResults() {
 
 function clearQueryInfo() {
   state.results = [];
+  state.batchImportHeaders = [];
   els.pastedAddressInput.value = "";
   els.originSelect.value = "";
   els.elevatorSelect.value = "";
@@ -1768,32 +1800,69 @@ function xmlEscape(value) {
 }
 
 function exportResults() {
-  const rows = state.results.map((row) => ({
-    销售产品线: row.salesProductLine,
-    销售系列: row.salesSeries,
-    销售型号: row.model,
-    "物料编码（主）": row.materialCode,
-    商品名称: row.productName,
-    购买数量: row.purchaseQty,
-    单件包裹数: row.packageCount,
-    总实际重量: row.totalActualWeight,
-    总推荐物流计费重量: row.totalChargeWeight,
-    发货地: row.origin,
-    是否上楼: row.elevatorService,
-    楼梯类型: row.floorType,
-    基础费用: row.baseCost,
-    上楼状态: row.floorStatus,
-    上楼费用: row.floorFeeDisplay,
-    推荐物流: row.carrier,
-    预估费用: row.cost,
-    备选物流: row.backupCarriers,
-    备选物流费用: row.backupCosts,
-    详细计算过程: formatCalculationDetailsForExport(row)
-  }));
-  const worksheet = XLSX.utils.json_to_sheet(rows);
+  const resultColumns = getResultExportColumns();
+  const hasBatchSource = state.results.some((row) => row.importSource?.headers?.length);
+  const worksheet = hasBatchSource
+    ? buildBatchResultWorksheet(resultColumns)
+    : XLSX.utils.json_to_sheet(state.results.map((row) => buildResultExportRow(row, resultColumns)));
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "物流查询结果");
   XLSX.writeFile(workbook, `物流查询结果_${formatDateForFileName(new Date())}.xlsx`);
+}
+
+function getResultExportColumns() {
+  return [
+    ["销售产品线", (row) => row.salesProductLine],
+    ["销售系列", (row) => row.salesSeries],
+    ["销售型号", (row) => row.model],
+    ["物料编码（主）", (row) => row.materialCode],
+    ["商品名称", (row) => row.productName],
+    ["购买数量", (row) => row.purchaseQty],
+    ["单件包裹数", (row) => row.packageCount],
+    ["总实际重量", (row) => row.totalActualWeight],
+    ["总推荐物流计费重量", (row) => row.totalChargeWeight],
+    ["发货地", (row) => row.origin],
+    ["是否上楼", (row) => row.elevatorService],
+    ["楼梯类型", (row) => row.floorType],
+    ["基础费用", (row) => row.baseCost],
+    ["上楼状态", (row) => row.floorStatus],
+    ["上楼费用", (row) => row.floorFeeDisplay],
+    ["推荐物流", (row) => row.carrier],
+    ["预估费用", (row) => row.cost],
+    ["备选物流", (row) => row.backupCarriers],
+    ["备选物流费用", (row) => row.backupCosts],
+    ["详细计算过程", (row) => formatCalculationDetailsForExport(row)]
+  ];
+}
+
+function buildResultExportRow(row, resultColumns) {
+  return resultColumns.reduce((output, [label, getter]) => {
+    output[label] = getter(row);
+    return output;
+  }, {});
+}
+
+function buildBatchResultWorksheet(resultColumns) {
+  const importHeaders = getBatchImportHeadersForExport();
+  const resultHeaders = resultColumns.map(([label]) => `查询结果-${label}`);
+  const data = state.results.map((row) => [
+    ...importHeaders.map((header) => row.importSource?.row?.[header] ?? ""),
+    ...resultColumns.map(([, getter]) => getter(row))
+  ]);
+  return XLSX.utils.aoa_to_sheet([[...importHeaders, ...resultHeaders], ...data]);
+}
+
+function getBatchImportHeadersForExport() {
+  const headers = [];
+  for (const header of state.batchImportHeaders || []) {
+    if (header && !headers.includes(header)) headers.push(header);
+  }
+  for (const row of state.results) {
+    for (const header of row.importSource?.headers || []) {
+      if (header && !headers.includes(header)) headers.push(header);
+    }
+  }
+  return headers;
 }
 
 function pick(row, names) {
