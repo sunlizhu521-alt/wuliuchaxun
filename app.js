@@ -1284,18 +1284,7 @@ function scoreProductCandidate(product, normalizedQuery, initialQuery) {
 }
 
 function getProductSearchFields(product) {
-  const rawValues = Object.values(product?.raw || {}).map((value) => clean(value)).filter(Boolean);
-  return [...new Set([
-    productDisplayName(product),
-    product?.shortName,
-    product?.name,
-    product?.materialCode,
-    ...(product?.materialCodes || []),
-    product?.model,
-    product?.salesProductLine,
-    product?.salesSeries,
-    ...rawValues
-  ].map((value) => clean(value)).filter(Boolean))];
+  return product?.shortName ? [product.shortName] : [];
 }
 
 function productDisplayName(product) {
