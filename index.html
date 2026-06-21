@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>物流查询系统</title>
-  <link rel="stylesheet" href="styles.css?v=20260661">
+  <link rel="stylesheet" href="styles.css?v=20260664">
 </head>
 <body>
   <div class="app-shell">
@@ -95,9 +95,10 @@
 
       <section class="toolbar material-toolbar">
         <div class="toolbar-title">商品信息</div>
-        <label class="field">
+        <label class="field product-search-field">
           <span>货品简称（必填）</span>
           <input id="productShortNameInput" name="logistics-product-short-name" type="text" placeholder="输入货品简称" autocomplete="new-password" autocapitalize="off" spellcheck="false" required>
+          <div id="productSuggestions" class="product-suggestions" hidden></div>
         </label>
         <label class="field">
           <span>物料编码</span>
@@ -209,6 +210,6 @@
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="shared-library.js?v=20260623"></script>
   <script src="china-regions.js?v=20260632"></script>
-  <script src="app.js?v=20260663"></script>
+  <script src="app.js?v=20260664"></script>
 </body>
 </html>

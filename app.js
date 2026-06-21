@@ -21,6 +21,15 @@ const state = {
   libraryReady: false
 };
 
+const PRODUCT_SUGGESTION_LIMIT = 12;
+const pinyinCollator = new Intl.Collator("zh-Hans-CN", { sensitivity: "base" });
+const pinyinInitialBoundaries = [
+  ["A", "阿"], ["B", "芭"], ["C", "擦"], ["D", "搭"], ["E", "蛾"], ["F", "发"],
+  ["G", "噶"], ["H", "哈"], ["J", "击"], ["K", "喀"], ["L", "垃"], ["M", "妈"],
+  ["N", "拿"], ["O", "哦"], ["P", "啪"], ["Q", "期"], ["R", "然"], ["S", "撒"],
+  ["T", "塌"], ["W", "挖"], ["X", "昔"], ["Y", "压"], ["Z", "匝"]
+];
+
 const els = {
   originSelect: document.getElementById("originSelect"),
   elevatorSelect: document.getElementById("elevatorSelect"),
@@ -33,6 +42,7 @@ const els = {
   addressInput: document.getElementById("addressInput"),
   modelInput: document.getElementById("modelInput"),
   productShortNameInput: document.getElementById("productShortNameInput"),
+  productSuggestions: document.getElementById("productSuggestions"),
   materialCodeInput: document.getElementById("materialCodeInput"),
   salesProductLineInput: document.getElementById("salesProductLineInput"),
   salesSeriesInput: document.getElementById("salesSeriesInput"),
@@ -81,8 +91,17 @@ function bindEvents() {
     renderDistrictOptions();
   });
   els.citySelect.addEventListener("change", renderDistrictOptions);
-  els.productShortNameInput.addEventListener("input", updateProductInfoFields);
+  els.productShortNameInput.addEventListener("input", () => {
+    delete els.productShortNameInput.dataset.productIndex;
+    updateProductInfoFields();
+    renderProductSuggestions();
+  });
+  els.productShortNameInput.addEventListener("focus", renderProductSuggestions);
+  els.productShortNameInput.addEventListener("keydown", handleProductSuggestionKeys);
   els.productShortNameInput.addEventListener("change", updateProductInfoFields);
+  document.addEventListener("mousedown", (event) => {
+    if (!event.target.closest(".product-search-field")) hideProductSuggestions();
+  });
   els.calculationSelect.addEventListener("change", () => renderSelectedCalculationDetail());
   els.exportResults.addEventListener("click", exportResults);
   els.downloadTemplate.addEventListener("click", downloadBatchTemplate);
@@ -763,21 +782,111 @@ function parsePastedAddress(address) {
 function updateProductInfoFields() {
   const shortName = clean(els.productShortNameInput.value);
   if (!shortName) {
+    delete els.productShortNameInput.dataset.productIndex;
     els.materialCodeInput.value = "";
     els.salesProductLineInput.value = "";
     els.salesSeriesInput.value = "";
     els.modelInput.value = "";
     return null;
   }
+  const selected = getSelectedProductFromInput();
+  if (selected) {
+    fillProductInfoFields(selected);
+    return selected;
+  }
   const match = findProductMatch({
     shortName
   });
   const product = match.product;
+  if (product) {
+    const index = state.products.indexOf(product);
+    if (index >= 0 && sameText(product.shortName, shortName)) {
+      els.productShortNameInput.dataset.productIndex = String(index);
+    }
+  }
+  fillProductInfoFields(product);
+  return product;
+}
+
+function fillProductInfoFields(product) {
   els.materialCodeInput.value = product?.materialCode || "";
   els.salesProductLineInput.value = product?.salesProductLine || "";
   els.salesSeriesInput.value = product?.salesSeries || "";
   els.modelInput.value = product?.model || "";
-  return product;
+}
+
+function getSelectedProductFromInput() {
+  const index = Number(els.productShortNameInput.dataset.productIndex);
+  if (!Number.isInteger(index) || index < 0 || index >= state.products.length) return null;
+  const product = state.products[index];
+  return clean(els.productShortNameInput.value) === clean(product.shortName) ? product : null;
+}
+
+function renderProductSuggestions() {
+  const suggestions = els.productSuggestions;
+  if (!suggestions) return;
+  const candidates = findProductCandidates(els.productShortNameInput.value, PRODUCT_SUGGESTION_LIMIT);
+  if (!candidates.length) {
+    suggestions.hidden = true;
+    suggestions.innerHTML = "";
+    return;
+  }
+  suggestions.innerHTML = candidates.map(({ product }, index) => {
+    const productIndex = state.products.indexOf(product);
+    const title = product.shortName || product.name || product.materialCode || "-";
+    const meta = [product.materialCode, product.salesProductLine, product.salesSeries, product.model]
+      .filter(Boolean)
+      .join(" / ");
+    return `
+      <button type="button" class="product-suggestion ${index === 0 ? "is-active" : ""}" data-product-index="${productIndex}">
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(meta || "商品包装明细")}</span>
+      </button>
+    `;
+  }).join("");
+  suggestions.hidden = false;
+  suggestions.querySelectorAll(".product-suggestion").forEach((button) => {
+    button.addEventListener("mousedown", (event) => event.preventDefault());
+    button.addEventListener("click", () => selectProductSuggestion(Number(button.dataset.productIndex)));
+  });
+}
+
+function hideProductSuggestions() {
+  if (!els.productSuggestions) return;
+  els.productSuggestions.hidden = true;
+}
+
+function selectProductSuggestion(index) {
+  const product = state.products[index];
+  if (!product) return;
+  els.productShortNameInput.value = product.shortName || product.name || product.materialCode || "";
+  els.productShortNameInput.dataset.productIndex = String(index);
+  fillProductInfoFields(product);
+  hideProductSuggestions();
+}
+
+function handleProductSuggestionKeys(event) {
+  if (!els.productSuggestions || els.productSuggestions.hidden) return;
+  const buttons = Array.from(els.productSuggestions.querySelectorAll(".product-suggestion"));
+  if (!buttons.length) return;
+  const currentIndex = Math.max(0, buttons.findIndex((button) => button.classList.contains("is-active")));
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    buttons[currentIndex]?.classList.remove("is-active");
+    const nextIndex = event.key === "ArrowDown"
+      ? Math.min(buttons.length - 1, currentIndex + 1)
+      : Math.max(0, currentIndex - 1);
+    buttons[nextIndex].classList.add("is-active");
+    buttons[nextIndex].scrollIntoView({ block: "nearest" });
+  }
+  if (event.key === "Enter") {
+    const active = buttons[currentIndex] || buttons[0];
+    if (active) {
+      event.preventDefault();
+      selectProductSuggestion(Number(active.dataset.productIndex));
+    }
+  }
+  if (event.key === "Escape") hideProductSuggestions();
 }
 
 async function runSingleQuery() {
@@ -1121,7 +1230,7 @@ function findCityName(text, province) {
 
 function findProductMatch({ shortName, materialCode }) {
   let matches = state.products;
-  if (shortName) matches = matches.filter((item) => sameProductKey(item.shortName, shortName));
+  if (shortName) matches = findProductCandidates(shortName, state.products.length).map((item) => item.product);
   if (materialCode) matches = matches.filter((item) => (item.materialCodes || [item.materialCode]).some((code) => sameText(code, materialCode)));
   if (!matches.length) {
     return {
@@ -1132,10 +1241,65 @@ function findProductMatch({ shortName, materialCode }) {
     };
   }
   if (matches.length > 1) {
-    const preferred = matches.find((item) => item.totalVolume || item.packageCount || item.materialCode) || matches[0];
+    const preferred = matches.find((item) => sameText(item.shortName, shortName))
+      || matches.find((item) => item.totalVolume || item.packageCount || item.materialCode)
+      || matches[0];
     return { product: preferred, error: "" };
   }
   return { product: matches[0], error: "" };
+}
+
+function findProductCandidates(query, limit = PRODUCT_SUGGESTION_LIMIT) {
+  const normalizedQuery = normalizeSearchToken(query);
+  const initialQuery = normalizedQuery.replace(/[^a-z0-9]/g, "");
+  const products = state.products || [];
+  const scored = products.map((product) => {
+    const score = scoreProductCandidate(product, normalizedQuery, initialQuery);
+    return score > 0 || !normalizedQuery ? { product, score } : null;
+  }).filter(Boolean);
+  return scored
+    .sort((a, b) => b.score - a.score || productDisplayName(a.product).localeCompare(productDisplayName(b.product), "zh-CN"))
+    .slice(0, limit);
+}
+
+function scoreProductCandidate(product, normalizedQuery, initialQuery) {
+  if (!normalizedQuery) return 1;
+  let best = 0;
+  for (const field of getProductSearchFields(product)) {
+    const normalizedField = normalizeSearchToken(field);
+    if (!normalizedField) continue;
+    if (normalizedField === normalizedQuery) best = Math.max(best, 1000);
+    else if (normalizedField.startsWith(normalizedQuery)) best = Math.max(best, 850);
+    else if (normalizedField.includes(normalizedQuery)) best = Math.max(best, 700);
+
+    const initials = getSearchInitials(field);
+    if (initialQuery && initials) {
+      if (initials === initialQuery) best = Math.max(best, 650);
+      else if (initials.startsWith(initialQuery)) best = Math.max(best, 540);
+      else if (initials.includes(initialQuery)) best = Math.max(best, 460);
+    }
+  }
+  if (product.shortName && sameText(product.shortName, normalizedQuery)) best = Math.max(best, 1100);
+  return best;
+}
+
+function getProductSearchFields(product) {
+  const rawValues = Object.values(product?.raw || {}).map((value) => clean(value)).filter(Boolean);
+  return [...new Set([
+    productDisplayName(product),
+    product?.shortName,
+    product?.name,
+    product?.materialCode,
+    ...(product?.materialCodes || []),
+    product?.model,
+    product?.salesProductLine,
+    product?.salesSeries,
+    ...rawValues
+  ].map((value) => clean(value)).filter(Boolean))];
+}
+
+function productDisplayName(product) {
+  return clean(product?.shortName || product?.name || product?.materialCode || "");
 }
 
 function matchAddress(quote, address) {
@@ -1473,6 +1637,8 @@ function clearQueryInfo() {
   renderDistrictOptions();
   els.addressInput.value = "";
   els.productShortNameInput.value = "";
+  delete els.productShortNameInput.dataset.productIndex;
+  hideProductSuggestions();
   els.materialCodeInput.value = "";
   els.salesProductLineInput.value = "";
   els.salesSeriesInput.value = "";
@@ -1884,6 +2050,34 @@ function normalizeHeader(value) {
 
 function normalizeText(value) {
   return String(value || "").replace(/\s+/g, "").toLowerCase();
+}
+
+function normalizeSearchToken(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, "")
+    .replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, "")
+    .toLowerCase();
+}
+
+function getSearchInitials(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .split("")
+    .map((char) => {
+      if (/[a-zA-Z0-9]/.test(char)) return char.toLowerCase();
+      if (/[\u4e00-\u9fa5]/.test(char)) return getChineseInitial(char).toLowerCase();
+      return "";
+    })
+    .join("");
+}
+
+function getChineseInitial(char) {
+  for (let index = pinyinInitialBoundaries.length - 1; index >= 0; index -= 1) {
+    const [letter, boundary] = pinyinInitialBoundaries[index];
+    if (pinyinCollator.compare(char, boundary) >= 0) return letter;
+  }
+  return "";
 }
 
 function normalizeQuoteZone(value) {
