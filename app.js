@@ -29,6 +29,9 @@ const pinyinInitialBoundaries = [
   ["N", "拿"], ["O", "哦"], ["P", "啪"], ["Q", "期"], ["R", "然"], ["S", "撒"],
   ["T", "塌"], ["W", "挖"], ["X", "昔"], ["Y", "压"], ["Z", "匝"]
 ];
+const carrierAliasGroups = [
+  ["顺丰大件", "顺丰快递"]
+];
 
 const els = {
   originSelect: document.getElementById("originSelect"),
@@ -1447,7 +1450,7 @@ function calculateFloorFeeDetail({ quote, product, totalChargeWeight, elevatorSe
 
 function findFloorFeeRule(carrier, floorType) {
   if (!carrier || !floorType) return null;
-  return state.floorFees.find((item) => sameText(item.carrier, carrier) && sameText(item.floorType, floorType)) || null;
+  return state.floorFees.find((item) => sameCarrierName(item.carrier, carrier) && sameText(item.floorType, floorType)) || null;
 }
 
 function calculatePackageFloorWeights(product, quote) {
@@ -2078,6 +2081,16 @@ function normalizeQuoteZone(value) {
 
 function sameText(a, b) {
   return normalizeText(a) === normalizeText(b);
+}
+
+function normalizeCarrierName(value) {
+  const text = normalizeText(value);
+  const group = carrierAliasGroups.find((aliases) => aliases.some((alias) => normalizeText(alias) === text));
+  return group ? normalizeText(group[0]) : text;
+}
+
+function sameCarrierName(a, b) {
+  return normalizeCarrierName(a) === normalizeCarrierName(b);
 }
 
 function normalizeProductKey(value) {
