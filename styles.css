@@ -112,6 +112,59 @@ select {
   color: var(--muted);
 }
 
+.library-progress {
+  display: grid;
+  gap: 7px;
+  max-width: 680px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.library-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.library-progress-head span {
+  color: #475467;
+  font-weight: 800;
+}
+
+.library-progress-head strong {
+  color: var(--muted);
+  font-weight: 600;
+  text-align: right;
+}
+
+.library-progress-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5ebf3;
+}
+
+.library-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width .2s ease, background .2s ease;
+}
+
+.library-progress[data-status="done"] .library-progress-bar {
+  background: #14805e;
+}
+
+.library-progress[data-status="warning"] .library-progress-bar {
+  background: #c77700;
+}
+
+.library-progress[data-status="error"] .library-progress-bar {
+  background: #c0362c;
+}
+
 .header-actions {
   display: flex;
   gap: 10px;

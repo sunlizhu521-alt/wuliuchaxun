@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>物流查询系统</title>
-  <link rel="stylesheet" href="styles.css?v=20260648">
+  <link rel="stylesheet" href="styles.css?v=20260649">
 </head>
 <body>
   <div class="app-shell">
@@ -27,6 +27,15 @@
         <div>
           <h1>物流查询</h1>
           <p>选择发货地，输入顾客地址和物料编码，销售产品线、销售系列与型号由商品信息表自动带出。</p>
+          <div class="library-progress" id="libraryProgress" role="status" aria-live="polite">
+            <div class="library-progress-head">
+              <span>维度库加载</span>
+              <strong id="libraryProgressText">等待加载维度库</strong>
+            </div>
+            <div class="library-progress-track">
+              <div id="libraryProgressBar" class="library-progress-bar" style="width: 0%"></div>
+            </div>
+          </div>
         </div>
         <div class="header-actions">
           <button class="button" id="reloadLibrary">刷新维度</button>
@@ -169,6 +178,6 @@
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="shared-library.js?v=20260623"></script>
   <script src="china-regions.js?v=20260632"></script>
-  <script src="app.js?v=20260648"></script>
+  <script src="app.js?v=20260649"></script>
 </body>
 </html>

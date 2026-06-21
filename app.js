@@ -14,7 +14,9 @@ const state = {
   productInfo: [],
   quotes: [],
   origins: [],
-  results: []
+  results: [],
+  libraryLoading: false,
+  libraryReady: false
 };
 
 const els = {
@@ -31,6 +33,9 @@ const els = {
   salesSeriesInput: document.getElementById("salesSeriesInput"),
   quantityInput: document.getElementById("quantityInput"),
   runQuery: document.getElementById("runQuery"),
+  libraryProgress: document.getElementById("libraryProgress"),
+  libraryProgressText: document.getElementById("libraryProgressText"),
+  libraryProgressBar: document.getElementById("libraryProgressBar"),
   queryProgress: document.getElementById("queryProgress"),
   queryProgressText: document.getElementById("queryProgressText"),
   queryProgressBar: document.getElementById("queryProgressBar"),
@@ -51,6 +56,7 @@ init();
 async function init() {
   bindEvents();
   renderProvinceOptions();
+  setLibraryProgress("正在准备加载维度库...", 5, "loading");
   await loadLibrary();
 }
 
@@ -91,24 +97,59 @@ function bindEvents() {
 }
 
 async function loadLibrary() {
+  if (state.libraryLoading) return;
+  state.libraryLoading = true;
+  state.libraryReady = false;
+  els.runQuery.disabled = true;
+  els.reloadLibrary.disabled = true;
+  setLibraryProgress("正在连接维度库...", 10, "loading");
   try {
+    await nextFrame();
     await window.LogisticsSharedLibrary?.importSharedLibrary?.();
+    setLibraryProgress("正在读取已应用的维度文件...", 28, "loading");
+    await nextFrame();
     const records = await loadAppliedRecords();
+    setLibraryProgress("正在解析商品信息表...", 45, "loading");
+    await nextFrame();
     const productInfoRows = await rowsFromRecord(records.get(slotIds.productInfo));
     state.productInfo = normalizeProductInfo(productInfoRows);
+    setLibraryProgress("正在解析发货地址表...", 58, "loading");
+    await nextFrame();
     state.origins = normalizeOrigins(await rowsFromRecord(records.get(slotIds.origin)));
+    setLibraryProgress("正在解析商品包装明细...", 72, "loading");
+    await nextFrame();
     state.products = normalizeProducts(
       await rowsFromRecord(records.get(slotIds.productPackage)),
       state.productInfo
     );
+    setLibraryProgress("正在解析物流公司报价...", 88, "loading");
+    await nextFrame();
     state.quotes = normalizeLogisticsQuoteSheets(await sheetsFromRecord(records.get(slotIds.logisticsQuote)));
 
     renderOriginOptions();
     updateProductInfoFields();
-    toast("维度表已刷新。");
+    const missing = getMissingLibraryParts();
+    state.libraryReady = !missing.length;
+    if (state.libraryReady) {
+      setLibraryProgress(
+        `维度库加载完成：发货地 ${state.origins.length} 个，商品 ${state.products.length} 条，报价 ${state.quotes.length} 条。`,
+        100,
+        "done"
+      );
+      els.runQuery.disabled = false;
+    } else {
+      setLibraryProgress(`维度库加载完成，但缺少：${missing.join("、")}。请先维护维度表库。`, 100, "warning");
+      els.runQuery.disabled = true;
+    }
+    toast(state.libraryReady ? "维度表已刷新。" : `维度表缺少：${missing.join("、")}`);
   } catch (error) {
     console.error(error);
+    setLibraryProgress(error.message || "维度库加载失败，请刷新维度或维护维度表库。", 100, "error");
+    els.runQuery.disabled = true;
     toast(error.message || "维度表加载失败");
+  } finally {
+    state.libraryLoading = false;
+    els.reloadLibrary.disabled = false;
   }
 }
 
@@ -619,6 +660,14 @@ function updateProductInfoFields() {
 
 async function runSingleQuery() {
   if (els.runQuery.disabled) return;
+  if (state.libraryLoading) {
+    toast("维度库正在加载，请等待加载完成后再查询。");
+    return;
+  }
+  if (!state.libraryReady) {
+    toast("维度库未加载完整，请先维护并刷新维度表库。");
+    return;
+  }
   els.runQuery.disabled = true;
   setQueryProgress("正在准备查询...", 20, "loading");
   try {
@@ -645,7 +694,7 @@ async function runSingleQuery() {
     setQueryProgress(error.message || "查询失败，请检查维度表。", 100, "error");
     toast(error.message || "查询失败");
   } finally {
-    els.runQuery.disabled = false;
+    els.runQuery.disabled = !state.libraryReady || state.libraryLoading;
   }
 }
 
@@ -661,7 +710,31 @@ function setQueryProgress(message, percent, status = "loading") {
   els.queryProgressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
 }
 
+function setLibraryProgress(message, percent, status = "loading") {
+  if (!els.libraryProgress) return;
+  els.libraryProgress.dataset.status = status;
+  els.libraryProgressText.textContent = message;
+  els.libraryProgressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+}
+
+function getMissingLibraryParts() {
+  const missing = [];
+  if (!state.origins.length) missing.push("发货地址");
+  if (!state.productInfo.length) missing.push("商品信息");
+  if (!state.products.length) missing.push("商品包装明细");
+  if (!state.quotes.length) missing.push("物流公司报价");
+  return missing;
+}
+
 async function importBatchFile(file) {
+  if (state.libraryLoading) {
+    toast("维度库正在加载，请等待加载完成后再批量导入。");
+    return;
+  }
+  if (!state.libraryReady) {
+    toast("维度库未加载完整，请先维护并刷新维度表库。");
+    return;
+  }
   try {
     const workbook = readWorkbook(file.name, await file.arrayBuffer());
     const sheetName = workbook.SheetNames[0];
