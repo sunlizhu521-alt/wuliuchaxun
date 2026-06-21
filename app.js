@@ -687,6 +687,11 @@ async function runSingleQuery() {
     toast("维度库未加载完整，请先维护并刷新维度表库。");
     return;
   }
+  const requiredCheck = validateManualRequiredFields();
+  if (!requiredCheck.valid) {
+    showRequiredFieldsWarning(requiredCheck);
+    return;
+  }
   els.runQuery.disabled = true;
   setQueryProgress("正在准备查询...", 20, "loading");
   try {
@@ -717,6 +722,31 @@ async function runSingleQuery() {
   } finally {
     els.runQuery.disabled = !state.libraryReady || state.libraryLoading;
   }
+}
+
+function validateManualRequiredFields() {
+  const checks = [
+    { label: "发货地", el: els.originSelect, valid: !!clean(els.originSelect.value) },
+    { label: "是否上楼", el: els.elevatorSelect, valid: !!clean(els.elevatorSelect.value) },
+    { label: "省", el: els.provinceSelect, valid: !!clean(els.provinceSelect.value) },
+    { label: "市", el: els.citySelect, valid: !!clean(els.citySelect.value) },
+    { label: "货品简称", el: els.productShortNameInput, valid: !!clean(els.productShortNameInput.value) },
+    { label: "购买件数", el: els.quantityInput, valid: !!clean(els.quantityInput.value) && parseNumber(els.quantityInput.value) >= 1 }
+  ];
+  const missing = checks.filter((item) => !item.valid);
+  return {
+    valid: missing.length === 0,
+    missing: missing.map((item) => item.label),
+    firstEl: missing[0]?.el || null
+  };
+}
+
+function showRequiredFieldsWarning(check) {
+  const message = `请填写必填项：${check.missing.join("、")}`;
+  toast(message);
+  setQueryProgress(message, 100, "warning");
+  els.resultHint.textContent = message;
+  check.firstEl?.focus?.();
 }
 
 function nextFrame() {
