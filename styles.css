@@ -217,6 +217,28 @@ select {
   border: 0;
 }
 
+.query-block {
+  position: relative;
+  margin: 0 0 18px;
+  padding: 14px 16px 16px;
+  border: 1px solid #d8e0ea;
+  border-left: 4px solid var(--primary);
+  border-radius: 8px;
+  background: #fbfdff;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, .03);
+}
+
+.query-block::before {
+  content: attr(data-block-title);
+  display: block;
+  grid-column: 1 / -1;
+  margin-bottom: 10px;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
 .toolbar {
   display: grid;
   gap: 12px;
@@ -224,6 +246,36 @@ select {
   padding: 12px 0;
   margin-bottom: 16px;
   border-bottom: 1px solid var(--line);
+}
+
+.toolbar.query-block {
+  padding: 14px 16px 16px;
+}
+
+.query-block > .toolbar {
+  padding: 0;
+  margin: 0;
+  border-bottom: 0;
+}
+
+.query-block > .toolbar + .toolbar {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #d8e0ea;
+}
+
+.panel.query-block {
+  background: #fbfdff;
+  border: 1px solid #d8e0ea;
+  border-left: 4px solid var(--primary);
+}
+
+.panel.query-block > .panel-header {
+  padding-top: 0;
+}
+
+.panel.query-block > .panel-header h2 {
+  display: none;
 }
 
 .address-toolbar {
@@ -250,6 +302,14 @@ select {
 
 .material-toolbar {
   grid-template-columns: 86px minmax(140px, 1.05fr) minmax(120px, .9fr) minmax(130px, .95fr) minmax(130px, .95fr) minmax(130px, .95fr) 104px auto minmax(180px, 220px);
+}
+
+.material-toolbar.query-block {
+  grid-template-columns: minmax(140px, 1.05fr) minmax(120px, .9fr) minmax(130px, .95fr) minmax(130px, .95fr) minmax(130px, .95fr) 104px auto minmax(180px, 220px);
+}
+
+.material-toolbar.query-block .toolbar-title {
+  display: none;
 }
 
 .toolbar-title {
@@ -525,9 +585,21 @@ th {
 }
 
 .calculation-detail-panel {
-  margin-top: 14px;
+  margin-top: 0;
   border: 1px solid var(--line);
   background: #fbfdff;
+}
+
+.calculation-detail-panel.query-block {
+  border-left-color: #2f855a;
+}
+
+.calculation-detail-panel.query-block::before {
+  color: #14532d;
+}
+
+.calculation-detail-panel.query-block .calculation-detail-head h3 {
+  display: none;
 }
 
 .calculation-detail-head {
@@ -858,7 +930,8 @@ th {
   .address-toolbar,
   .address-recognizer,
   .origin-toolbar,
-  .material-toolbar {
+  .material-toolbar,
+  .material-toolbar.query-block {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -890,6 +963,7 @@ th {
   .address-recognizer,
   .origin-toolbar,
   .material-toolbar,
+  .material-toolbar.query-block,
   .slot-grid,
   .library-grid,
   .library-card.file-slot {

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>物流查询系统</title>
-  <link rel="stylesheet" href="styles.css?v=20260664">
+  <link rel="stylesheet" href="styles.css?v=20260668">
 </head>
 <body>
   <div class="app-shell">
@@ -43,7 +43,7 @@
         </div>
       </header>
 
-      <section class="toolbar query-toolbar origin-toolbar">
+      <section class="toolbar query-toolbar origin-toolbar query-block" data-block-title="发货地">
         <label class="field">
           <span>发货地（必选）</span>
           <select id="originSelect" required></select>
@@ -66,34 +66,36 @@
         </label>
       </section>
 
-      <section class="toolbar address-recognizer">
-        <label class="field">
-          <span>地址识别</span>
-          <input id="pastedAddressInput" type="text" placeholder="粘贴顾客完整地址">
-        </label>
-        <button class="button" id="recognizeAddressBtn" type="button">识别地址</button>
+      <section class="query-block address-section-block" data-block-title="地址识别与收货地址">
+        <div class="toolbar address-recognizer">
+          <label class="field">
+            <span>地址识别</span>
+            <input id="pastedAddressInput" type="text" placeholder="粘贴顾客完整地址">
+          </label>
+          <button class="button" id="recognizeAddressBtn" type="button">识别地址</button>
+        </div>
+
+        <div class="toolbar query-toolbar address-toolbar">
+          <label class="field">
+            <span>省</span>
+            <select id="provinceSelect" required></select>
+          </label>
+          <label class="field">
+            <span>市</span>
+            <select id="citySelect" required></select>
+          </label>
+          <label class="field">
+            <span>县/区域</span>
+            <select id="districtSelect"></select>
+          </label>
+          <label class="field address-detail">
+            <span>详细地址</span>
+            <input id="addressInput" type="text" placeholder="街道/门牌，可不填">
+          </label>
+        </div>
       </section>
 
-      <section class="toolbar query-toolbar address-toolbar">
-        <label class="field">
-          <span>省</span>
-          <select id="provinceSelect" required></select>
-        </label>
-        <label class="field">
-          <span>市</span>
-          <select id="citySelect" required></select>
-        </label>
-        <label class="field">
-          <span>县/区域</span>
-          <select id="districtSelect"></select>
-        </label>
-        <label class="field address-detail">
-          <span>详细地址</span>
-          <input id="addressInput" type="text" placeholder="街道/门牌，可不填">
-        </label>
-      </section>
-
-      <section class="toolbar material-toolbar">
+      <section class="toolbar material-toolbar query-block" data-block-title="商品信息">
         <div class="toolbar-title">商品信息</div>
         <label class="field product-search-field">
           <span>货品简称（必填）</span>
@@ -132,7 +134,7 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel query-block" data-block-title="查询结果">
         <div class="panel-header">
           <div>
             <h2>查询结果</h2>
@@ -171,7 +173,9 @@
             </tbody>
           </table>
         </div>
-        <div class="calculation-detail-panel">
+      </section>
+
+      <section class="panel calculation-detail-panel query-block" data-block-title="详细计算过程">
           <div class="calculation-detail-head">
             <div>
               <h3>详细计算过程</h3>
@@ -187,10 +191,9 @@
           <div id="calculationDetailBody" class="calculation-detail-body">
             <div class="calculation-empty">暂无详细计算过程</div>
           </div>
-        </div>
       </section>
 
-      <section class="panel">
+      <section class="panel query-block" data-block-title="批量导入查询">
         <div class="panel-header">
           <div>
             <h2>批量导入查询</h2>
