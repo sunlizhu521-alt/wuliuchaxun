@@ -262,7 +262,7 @@ select {
 
 table {
   width: 100%;
-  min-width: 1980px;
+  min-width: 1560px;
   border-collapse: collapse;
   background: #fff;
 }
@@ -281,15 +281,6 @@ th {
   font-weight: 700;
 }
 
-.calculation-cell {
-  min-width: 420px;
-  max-width: 520px;
-  padding: 0;
-  background: #fbfdff;
-  text-align: left;
-  vertical-align: top;
-}
-
 .calculation-box {
   display: grid;
   gap: 8px;
@@ -306,7 +297,7 @@ th {
 .calculation-list {
   display: grid;
   gap: 8px;
-  max-height: 220px;
+  max-height: 360px;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -367,6 +358,58 @@ th {
   padding: 12px 14px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.calculation-detail-panel {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  background: #fbfdff;
+}
+
+.calculation-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.calculation-detail-head h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.calculation-detail-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.detail-selector {
+  display: grid;
+  gap: 6px;
+  min-width: 260px;
+}
+
+.detail-selector span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.detail-selector select {
+  width: 100%;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #fff;
+}
+
+.calculation-detail-body {
+  max-height: 460px;
+  overflow-y: auto;
+  padding: 12px 14px;
 }
 
 .empty {
@@ -698,6 +741,14 @@ th {
 
   .calculation-grid {
     grid-template-columns: 1fr;
+  }
+
+  .calculation-detail-head {
+    display: grid;
+  }
+
+  .detail-selector {
+    min-width: 0;
   }
 }
 

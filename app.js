@@ -34,6 +34,9 @@ const els = {
   reloadLibrary: document.getElementById("reloadLibrary"),
   resultBody: document.getElementById("resultBody"),
   resultHint: document.getElementById("resultHint"),
+  calculationSelect: document.getElementById("calculationSelect"),
+  calculationHint: document.getElementById("calculationHint"),
+  calculationDetailBody: document.getElementById("calculationDetailBody"),
   exportResults: document.getElementById("exportResults"),
   downloadTemplate: document.getElementById("downloadTemplate"),
   dropZone: document.getElementById("dropZone"),
@@ -62,6 +65,7 @@ function bindEvents() {
   els.citySelect.addEventListener("change", renderDistrictOptions);
   els.materialCodeInput.addEventListener("input", updateProductInfoFields);
   els.materialCodeInput.addEventListener("change", updateProductInfoFields);
+  els.calculationSelect.addEventListener("change", () => renderSelectedCalculationDetail());
   els.exportResults.addEventListener("click", exportResults);
   els.downloadTemplate.addEventListener("click", downloadBatchTemplate);
   els.dropZone.addEventListener("click", () => els.batchFile.click());
@@ -966,12 +970,14 @@ function buildCalculationDetail({ item, isBest, product, purchaseQty, totalVolum
 
 function renderResults() {
   if (!state.results.length) {
-    els.resultBody.innerHTML = `<tr><td colspan="15" class="empty">暂无查询结果</td></tr>`;
+    els.resultBody.innerHTML = `<tr><td colspan="14" class="empty">暂无查询结果</td></tr>`;
+    renderCalculationSelector();
     els.exportResults.disabled = true;
     return;
   }
   els.resultBody.innerHTML = state.results.map((row, index) => `
     <tr class="result-main-row">
+      <td>${index + 1}</td>
       <td>${escapeHtml(row.salesProductLine)}</td>
       <td>${escapeHtml(row.salesSeries)}</td>
       <td>${escapeHtml(row.model)}</td>
@@ -986,15 +992,45 @@ function renderResults() {
       <td>${row.cost === "" ? "未匹配" : escapeHtml(row.cost)}</td>
       <td>${escapeHtml(row.backupCarriers)}</td>
       <td>${escapeHtml(row.backupCosts)}</td>
-      <td class="calculation-cell">${renderCalculationDetails(row, index)}</td>
     </tr>
   `).join("");
+  renderCalculationSelector(true);
   const matched = state.results.filter((row) => row.carrier).length;
   const firstFailure = state.results.find((row) => !row.carrier && row.message);
   els.resultHint.textContent = firstFailure
     ? `共 ${state.results.length} 条，已匹配 ${matched} 条。未匹配原因：${firstFailure.message}`
     : `共 ${state.results.length} 条，已匹配 ${matched} 条。`;
   els.exportResults.disabled = false;
+}
+
+function renderCalculationSelector(forceFirst = false) {
+  if (!state.results.length) {
+    els.calculationSelect.innerHTML = `<option value="">暂无明细</option>`;
+    els.calculationSelect.disabled = true;
+    els.calculationHint.textContent = "暂无详细计算过程";
+    els.calculationDetailBody.innerHTML = `<div class="calculation-empty">暂无详细计算过程</div>`;
+    return;
+  }
+  const current = Number(els.calculationSelect.value);
+  const selectedIndex = !forceFirst && Number.isInteger(current) && current >= 0 && current < state.results.length ? current : 0;
+  els.calculationSelect.innerHTML = state.results.map((row, index) => {
+    const label = `${index + 1}｜${row.materialCode || "-"}｜${row.carrier || "未匹配"}`;
+    return `<option value="${index}">${escapeHtml(label)}</option>`;
+  }).join("");
+  els.calculationSelect.value = String(selectedIndex);
+  els.calculationSelect.disabled = false;
+  renderSelectedCalculationDetail();
+}
+
+function renderSelectedCalculationDetail() {
+  if (!state.results.length) {
+    els.calculationDetailBody.innerHTML = `<div class="calculation-empty">暂无详细计算过程</div>`;
+    return;
+  }
+  const index = Math.max(0, Math.min(Number(els.calculationSelect.value) || 0, state.results.length - 1));
+  const row = state.results[index];
+  els.calculationHint.textContent = `当前展示序号 ${index + 1}，物料编码 ${row.materialCode || "-"}，推荐物流 ${row.carrier || "未匹配"}。`;
+  els.calculationDetailBody.innerHTML = renderCalculationDetails(row, index);
 }
 
 function renderCalculationDetails(row, index) {

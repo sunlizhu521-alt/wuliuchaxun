@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>物流查询系统</title>
-  <link rel="stylesheet" href="styles.css?v=20260646">
+  <link rel="stylesheet" href="styles.css?v=20260647">
 </head>
 <body>
   <div class="app-shell">
@@ -102,6 +102,7 @@
           <table>
             <thead>
               <tr>
+                <th>序号</th>
                 <th>销售产品线</th>
                 <th>销售系列</th>
                 <th>销售型号</th>
@@ -116,13 +117,29 @@
                 <th>预估费用</th>
                 <th>备选物流</th>
                 <th>备选物流费用</th>
-                <th>详细计算过程</th>
               </tr>
             </thead>
             <tbody id="resultBody">
-              <tr><td colspan="15" class="empty">暂无查询结果</td></tr>
+              <tr><td colspan="14" class="empty">暂无查询结果</td></tr>
             </tbody>
           </table>
+        </div>
+        <div class="calculation-detail-panel">
+          <div class="calculation-detail-head">
+            <div>
+              <h3>详细计算过程</h3>
+              <p id="calculationHint">默认展示序号 1，可切换查看对应明细。</p>
+            </div>
+            <label class="detail-selector">
+              <span>明细序号</span>
+              <select id="calculationSelect" disabled>
+                <option value="">暂无明细</option>
+              </select>
+            </label>
+          </div>
+          <div id="calculationDetailBody" class="calculation-detail-body">
+            <div class="calculation-empty">暂无详细计算过程</div>
+          </div>
         </div>
       </section>
 
@@ -146,6 +163,6 @@
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="shared-library.js?v=20260623"></script>
   <script src="china-regions.js?v=20260632"></script>
-  <script src="app.js?v=20260646"></script>
+  <script src="app.js?v=20260647"></script>
 </body>
 </html>
