@@ -235,7 +235,7 @@ select {
 }
 
 .origin-toolbar {
-  grid-template-columns: minmax(180px, 240px) 1fr;
+  grid-template-columns: minmax(180px, 240px) minmax(180px, 240px) 1fr;
   margin-bottom: 0;
 }
 

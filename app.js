@@ -21,6 +21,7 @@ const state = {
 
 const els = {
   originSelect: document.getElementById("originSelect"),
+  elevatorSelect: document.getElementById("elevatorSelect"),
   pastedAddressInput: document.getElementById("pastedAddressInput"),
   recognizeAddressBtn: document.getElementById("recognizeAddressBtn"),
   provinceSelect: document.getElementById("provinceSelect"),
@@ -696,6 +697,7 @@ async function runSingleQuery() {
     await nextFrame();
     const result = calculateBestOption({
       origin: els.originSelect.value,
+      elevatorService: els.elevatorSelect.value,
       address: addressData.address,
       addressError: addressData.error,
       model: product?.model || els.modelInput.value.trim(),
@@ -761,6 +763,7 @@ async function importBatchFile(file) {
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "", raw: false });
     state.results = rows.map((row) => calculateBestOption({
       origin: pick(row, ["发货地", "供应商简称", "发货仓", "仓库"]) || els.originSelect.value,
+      elevatorService: pick(row, ["是否上楼", "上楼服务", "上楼", "需上楼"]) || els.elevatorSelect.value,
       address: pick(row, ["顾客地址", "客户地址", "收货地址", "地址"]) || "",
       shortName: pick(row, ["货品简称", "货品名称简称", "货品简名", "简称"]) || "",
       purchaseQty: parsePurchaseQty(pick(row, ["购买件数", "商品购买件数", "件数", "数量"]))
@@ -775,6 +778,7 @@ async function importBatchFile(file) {
 
 function calculateBestOption(input) {
   const originName = clean(input.origin);
+  const elevatorService = clean(input.elevatorService);
   const address = clean(input.address);
   const shortName = clean(input.shortName);
   const materialCode = clean(input.materialCode);
@@ -788,6 +792,9 @@ function calculateBestOption(input) {
 
   if (!originName) {
     return buildResult(input, origin, product, null, [], "发货地为必选项。");
+  }
+  if (!elevatorService) {
+    return buildResult(input, origin, product, null, [], "是否上楼为必选项。");
   }
   if (input.addressError) {
     return buildResult(input, origin, product, null, [], input.addressError);
@@ -1052,6 +1059,7 @@ function buildResult(input, origin, product, best, candidates, message) {
   const purchasedVolume = product ? roundWeight(totalVolume * purchaseQty) : 0;
   return {
     origin: clean(input.origin),
+    elevatorService: clean(input.elevatorService),
     quoteZone: origin?.quoteZone || normalizeQuoteZone(input.origin) || "",
     address: clean(input.address),
     shortName: product?.shortName || clean(input.shortName),
@@ -1142,6 +1150,7 @@ function clearQueryInfo() {
   state.results = [];
   els.pastedAddressInput.value = "";
   els.originSelect.value = "";
+  els.elevatorSelect.value = "";
   els.provinceSelect.value = "";
   renderCityOptions();
   renderDistrictOptions();
