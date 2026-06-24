@@ -2098,7 +2098,7 @@ function getResultExportColumns() {
     ["购买数量", (row) => row.purchaseQty],
     ["单件包裹数", (row) => row.packageCount],
     ["总实际重量", (row) => row.totalActualWeight],
-    ["总推荐物流计费重量", (row) => row.totalChargeWeight],
+    ["体积重量", (row) => row.totalChargeWeight],
     ["发货地", (row) => row.origin],
     ["是否上楼", (row) => row.elevatorService],
     ["楼梯类型", (row) => row.floorType],
