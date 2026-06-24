@@ -1077,8 +1077,9 @@ function calculateBestOption(input) {
   if (match.error) {
     return buildResult(input, origin, product, null, [], match.error);
   }
-  if (!product.packageCount || (!product.totalVolume && !product.singleChargeWeight)) {
-    return buildResult(input, origin, product, null, [], "该物料缺少总体积或有效包裹计费重量。");
+  const totalActualWeight = calculateTotalActualWeight(product, purchaseQty);
+  if (!product.packageCount || (!product.totalVolume && !product.singleChargeWeight && !totalActualWeight)) {
+    return buildResult(input, origin, product, null, [], "该物料缺少总体积、实际重量或有效包裹计费重量。");
   }
 
   const candidates = state.quotes
@@ -1087,7 +1088,8 @@ function calculateBestOption(input) {
     .map((quote) => {
       const addressMatch = matchAddress(quote, address);
       if (!addressMatch.matched) return null;
-      const totalChargeWeight = calculateLogisticsChargeWeight(product, purchaseQty, quote);
+      const volumeWeight = calculateLogisticsChargeWeight(product, purchaseQty, quote);
+      const totalChargeWeight = roundWeight(Math.max(totalActualWeight || 0, volumeWeight || 0));
       if (!Number.isFinite(totalChargeWeight) || totalChargeWeight <= 0) return null;
       const costDetail = calculateCostDetail(quote, totalChargeWeight);
       const floorFeeDetail = calculateFloorFeeDetail({
@@ -1102,6 +1104,7 @@ function calculateBestOption(input) {
       return {
         quote,
         match: addressMatch,
+        volumeWeight,
         totalChargeWeight,
         baseCost: costDetail.total,
         floorFee: floorFeeDetail.fee,
@@ -1331,6 +1334,12 @@ function calculateLogisticsChargeWeight(product, purchaseQty, quote) {
   return roundWeight((product?.singleChargeWeight || 0) * purchaseQty);
 }
 
+function calculateTotalActualWeight(product, purchaseQty) {
+  if (!product) return 0;
+  if (product.totalActualWeight) return roundWeight(product.totalActualWeight);
+  return roundWeight((product.singleWeight || 0) * purchaseQty);
+}
+
 function calculateCostDetail(quote, weight) {
   const detail = {
     firstWeight: quote?.firstWeight || 0,
@@ -1442,7 +1451,7 @@ function calculateFloorFeeDetail({ quote, product, totalChargeWeight, elevatorSe
   detail.status = "可上楼";
   detail.lines.push({
     label: "上楼费",
-    formula: `整单总计费重量 ${formatNumber(totalChargeWeight)}kg × ${formatNumber(matched.rate)} 元/kg × 折扣 ${formatPercent(floorRule.discount)}`,
+    formula: `整单计费重量 ${formatNumber(totalChargeWeight)}kg × ${formatNumber(matched.rate)} 元/kg × 折扣 ${formatPercent(floorRule.discount)}`,
     amount: fee
   });
   return detail;
@@ -1484,10 +1493,10 @@ function floorRuleMatches(rule, childWeights, totalChargeWeight) {
 
 function buildResult(input, origin, product, best, candidates, message) {
   const purchaseQty = parsePurchaseQty(input.purchaseQty);
-  const singleWeight = product?.singleWeight || 0;
   const singleChargeWeight = product?.singleChargeWeight || 0;
-  const totalActualWeight = product?.totalActualWeight || (product ? roundWeight(singleWeight * purchaseQty) : 0);
+  const totalActualWeight = calculateTotalActualWeight(product, purchaseQty);
   const quote = best?.quote || {};
+  const volumeWeight = best?.volumeWeight || 0;
   const totalChargeWeight = best?.totalChargeWeight || 0;
   const alternatives = best
     ? candidates.filter((item) => item !== best)
@@ -1511,6 +1520,7 @@ function buildResult(input, origin, product, best, candidates, message) {
     packageCount: product?.packageCount || 0,
     totalActualWeight,
     singleChargeWeight,
+    volumeWeight,
     totalChargeWeight,
     baseCost: best ? best.baseCost : "",
     floorStatus: floorFeeDetail?.status || "",
@@ -1527,6 +1537,7 @@ function buildResult(input, origin, product, best, candidates, message) {
       isBest: item === best,
       product,
       purchaseQty,
+      totalActualWeight,
       totalVolume,
       purchasedVolume
     })),
@@ -1534,9 +1545,11 @@ function buildResult(input, origin, product, best, candidates, message) {
   };
 }
 
-function buildCalculationDetail({ item, isBest, product, purchaseQty, totalVolume, purchasedVolume }) {
+function buildCalculationDetail({ item, isBest, product, purchaseQty, totalActualWeight, totalVolume, purchasedVolume }) {
   const quote = item.quote || {};
   const floorDetail = item.floorFeeDetail || {};
+  const volumeWeight = item.volumeWeight || 0;
+  const chargeWeight = item.totalChargeWeight || 0;
   return {
     carrier: quote.carrier || "",
     role: isBest ? "推荐物流" : "备选物流",
@@ -1544,9 +1557,11 @@ function buildCalculationDetail({ item, isBest, product, purchaseQty, totalVolum
     matchedRegion: item.match?.label || "",
     bubbleRatio: quote.bubbleRatio || 0,
     purchaseQty,
+    totalActualWeight,
     singleVolume: totalVolume || 0,
     purchasedVolume,
-    chargeWeight: item.totalChargeWeight,
+    volumeWeight,
+    chargeWeight,
     baseCost: item.baseCost,
     floorFee: item.floorFee,
     floorFeeDisplay: floorDetail.displayFee || "0",
@@ -1555,9 +1570,10 @@ function buildCalculationDetail({ item, isBest, product, purchaseQty, totalVolum
     cost: item.cost,
     costLines: item.costDetail?.lines || [],
     floorLines: floorDetail.lines || [],
-    formula: quote.bubbleRatio
-      ? `${formatNumber(totalVolume)} × ${purchaseQty} ÷ ${formatNumber(quote.bubbleRatio)} = ${formatNumber(item.totalChargeWeight)}kg`
-      : `${formatNumber(product?.singleChargeWeight || 0)} × ${purchaseQty} = ${formatNumber(item.totalChargeWeight)}kg`
+    volumeFormula: quote.bubbleRatio
+      ? `${formatNumber(totalVolume)} × ${purchaseQty} ÷ ${formatNumber(quote.bubbleRatio)} = ${formatNumber(volumeWeight)}kg`
+      : `${formatNumber(product?.singleChargeWeight || 0)} × ${purchaseQty} = ${formatNumber(volumeWeight)}kg`,
+    chargeFormula: `max(${formatNumber(totalActualWeight)}kg, ${formatNumber(volumeWeight)}kg) = ${formatNumber(chargeWeight)}kg`
   };
 }
 
@@ -1579,7 +1595,7 @@ function formatFloorPackageWeightDetails(weights) {
 
 function renderResults() {
   if (!state.results.length) {
-    els.resultBody.innerHTML = `<tr><td colspan="20" class="empty">暂无查询结果</td></tr>`;
+    els.resultBody.innerHTML = `<tr><td colspan="21" class="empty">暂无查询结果</td></tr>`;
     renderCalculationSelector();
     els.exportResults.disabled = true;
     return;
@@ -1595,6 +1611,7 @@ function renderResults() {
       <td>${escapeHtml(row.purchaseQty)}</td>
       <td>${escapeHtml(row.packageCount)}</td>
       <td>${escapeHtml(row.totalActualWeight)}</td>
+      <td>${escapeHtml(row.volumeWeight)}</td>
       <td>${escapeHtml(row.totalChargeWeight)}</td>
       <td>${escapeHtml(row.origin)}</td>
       <td>${escapeHtml(row.elevatorService)}</td>
@@ -1694,8 +1711,10 @@ function renderCalculationDetails(row, index) {
         <span>单件总体积：${escapeHtml(formatNumber(detail.singleVolume))}</span>
         <span>购买件数：${escapeHtml(detail.purchaseQty)}</span>
         <span>购买总体积：${escapeHtml(formatNumber(detail.purchasedVolume))}</span>
+        <span>总实际重量：${escapeHtml(formatNumber(detail.totalActualWeight))}kg</span>
         <span>泡比：${escapeHtml(formatNumber(detail.bubbleRatio))}</span>
-        <span>计费重量：${escapeHtml(detail.formula)}</span>
+        <span>体积重量：${escapeHtml(detail.volumeFormula)}</span>
+        <span>计费重量：${escapeHtml(detail.chargeFormula)}</span>
         <span>子包裹判断重量：${escapeHtml(formatFloorPackageWeightDetails(detail.floorPackageWeights))}</span>
         <span>上楼状态：${escapeHtml(detail.floorStatus || "-")}</span>
       </div>
@@ -2098,7 +2117,8 @@ function getResultExportColumns() {
     ["购买数量", (row) => row.purchaseQty],
     ["单件包裹数", (row) => row.packageCount],
     ["总实际重量", (row) => row.totalActualWeight],
-    ["体积重量", (row) => row.totalChargeWeight],
+    ["体积重量", (row) => row.volumeWeight],
+    ["计费重量", (row) => row.totalChargeWeight],
     ["发货地", (row) => row.origin],
     ["是否上楼", (row) => row.elevatorService],
     ["楼梯类型", (row) => row.floorType],
@@ -2288,7 +2308,8 @@ function formatCalculationDetailsForExport(row) {
       `${detail.role}：${detail.carrier}`,
       `报价Sheet：${detail.sheetName || "-"}`,
       `匹配区域：${detail.matchedRegion || "-"}`,
-      `计费重量：${detail.formula}`,
+      `体积重量：${detail.volumeFormula}`,
+      `计费重量：${detail.chargeFormula}`,
       `子包裹判断重量：${formatFloorPackageWeightDetails(detail.floorPackageWeights)}`,
       ...(detail.costLines || []).map((line) => `${line.label}：${line.formula} = ${formatMoney(line.amount)}元`),
       `基础费用：${formatMoney(detail.baseCost)}元`,
