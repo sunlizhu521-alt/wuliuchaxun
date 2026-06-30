@@ -142,7 +142,6 @@ function bindEvents() {
 
 async function loadLibrary() {
   if (state.libraryLoading) return;
-  workbookCache.clear();
   state.libraryLoading = true;
   state.libraryReady = false;
   els.runQuery.disabled = true;
@@ -173,6 +172,9 @@ async function loadLibrary() {
     state.quotes = normalizeLogisticsQuoteSheets(quoteSheets);
     state.floorFees = normalizeFloorFeeSheets(quoteSheets);
     state.addonFees = normalizeAddonFeeSheets(quoteSheets);
+    // 释放不再需要的二进制数据
+    records.forEach((record) => { delete record.fileData; delete record.fileBuffer; });
+    workbookCache.clear();
 
     renderOriginOptions();
     updateProductInfoFields();
@@ -296,7 +298,7 @@ function normalizeOrigins(rows) {
       phone: clean(pick(row, ["联系电话", "电话", "手机号"])),
       raw: row
     };
-    origin.quoteZone = normalizeQuoteZone(origin.quoteZone || origin.name || origin.address || origin.city);
+    origin.quoteZone = clean(origin.city) || clean(origin.province) || normalizeQuoteZone(origin.name || origin.address || "");
     return origin;
   }).filter(Boolean)
     .filter((origin, index, list) => list.findIndex((item) => sameText(item.name, origin.name)) === index)
@@ -1268,15 +1270,15 @@ function validateCustomerAddress(address) {
 }
 
 function parseCustomerAddress(address) {
-  const text = clean(address);
-  if (!text) return { province: "", city: "" };
-  const compact = text.replace(/\s+/g, "");
-  const province = findProvinceName(compact);
-  const afterProvince = province ? compact.slice(compact.indexOf(province.matchText) + province.matchText.length) : compact;
-  const city = findCityName(afterProvince, province);
+  const parsed = parsePastedAddress(address);
+  if (parsed.error) {
+    return { province: "", city: "", detail: "" };
+  }
   return {
-    province: province?.name || "",
-    city: city || ""
+    province: parsed.province?.name || "",
+    city: parsed.city?.name || "",
+    district: parsed.district?.name || "",
+    detail: parsed.detail || ""
   };
 }
 
@@ -1535,6 +1537,7 @@ function calculateFloorFeeDetail({ quote, product, totalChargeWeight, elevatorSe
     detail.displayFee = "未计入";
     detail.message = detail.status;
     detail.lines.push({ label: "上楼费", formula: `未找到 ${quote.carrier || "-"} / ${floorType || "-"} 的上楼收费规则`, amount: Number.NaN });
+    toast(`未找到 ${quote.carrier || "该物流公司"} / ${floorType || "该楼梯类型"} 的上楼收费规则，未计入上楼费`);
     return detail;
   }
   detail.discount = floorRule.discount;
@@ -1546,6 +1549,7 @@ function calculateFloorFeeDetail({ quote, product, totalChargeWeight, elevatorSe
     detail.displayFee = "未计入";
     detail.message = detail.status;
     detail.lines.push({ label: "上楼费", formula: "缺少体积1、体积2等子包裹体积", amount: Number.NaN });
+    toast("子包裹体积缺失，无法计算上楼费");
     return detail;
   }
   const matched = matchFloorFeeRule(floorRule.rules, detail.childWeights, totalChargeWeight);
@@ -1554,6 +1558,7 @@ function calculateFloorFeeDetail({ quote, product, totalChargeWeight, elevatorSe
     detail.displayFee = "未计入";
     detail.message = detail.status;
     detail.lines.push({ label: "上楼规则命中", formula: `未命中可识别规则，未计入上楼费`, amount: Number.NaN });
+    toast("上楼费规则无法识别，未计入上楼费");
     return detail;
   }
   detail.lines.push({ label: "上楼规则命中", formula: matched.description || "命中上楼收费规则", amount: Number.NaN });
@@ -2636,9 +2641,6 @@ function getChineseInitial(char) {
 }
 
 function normalizeQuoteZone(value) {
-  const text = normalizeText(value);
-  if (text.includes("河北")) return "河北";
-  if (text.includes("宁波")) return "宁波";
   return clean(value);
 }
 
