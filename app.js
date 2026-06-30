@@ -23,6 +23,7 @@ const state = {
 };
 
 let productInputTimer = null;
+let suppressToast = false;
 const workbookCache = new Map();
 
 const PRODUCT_SUGGESTION_LIMIT = 12;
@@ -1082,6 +1083,13 @@ async function importBatchFile(file) {
     const rows = XLSX.utils.sheet_to_json(worksheet, { defval: "", raw: false });
     const headers = getWorksheetHeaders(worksheet);
     state.batchImportHeaders = headers;
+    const hasAddress = headers.some((header) => header && (header.includes("地址") || header.includes("顾客")));
+    const hasShortName = headers.some((header) => header && (header.includes("货品简称") || header.includes("简称")));
+    if (!hasAddress || !hasShortName) {
+      toast(`导入文件缺少必填列：${[!hasAddress && "顾客地址", !hasShortName && "货品简称"].filter(Boolean).join("、")}`);
+      return;
+    }
+    suppressToast = true;
     state.results = rows.map((row, index) => {
       const result = calculateBestOption({
         origin: pick(row, ["发货地", "供应商简称", "发货仓", "仓库"]) || els.originSelect.value,
@@ -1098,9 +1106,11 @@ async function importBatchFile(file) {
       };
       return result;
     });
+    suppressToast = false;
     renderResults();
     toast(`已导入 ${state.results.length} 条地址查询。`);
   } catch (error) {
+    suppressToast = false;
     console.error(error);
     toast(error.message || "导入失败");
   }
@@ -1282,51 +1292,6 @@ function parseCustomerAddress(address) {
   };
 }
 
-function findProvinceName(text) {
-  const provinces = [
-    ["北京市", "北京"],
-    ["天津市", "天津"],
-    ["上海市", "上海"],
-    ["重庆市", "重庆"],
-    ["河北省", "河北"],
-    ["山西省", "山西"],
-    ["辽宁省", "辽宁"],
-    ["吉林省", "吉林"],
-    ["黑龙江省", "黑龙江"],
-    ["江苏省", "江苏"],
-    ["浙江省", "浙江"],
-    ["安徽省", "安徽"],
-    ["福建省", "福建"],
-    ["江西省", "江西"],
-    ["山东省", "山东"],
-    ["河南省", "河南"],
-    ["湖北省", "湖北"],
-    ["湖南省", "湖南"],
-    ["广东省", "广东"],
-    ["海南省", "海南"],
-    ["四川省", "四川"],
-    ["贵州省", "贵州"],
-    ["云南省", "云南"],
-    ["陕西省", "陕西"],
-    ["甘肃省", "甘肃"],
-    ["青海省", "青海"],
-    ["台湾省", "台湾"],
-    ["内蒙古自治区", "内蒙古"],
-    ["广西壮族自治区", "广西"],
-    ["西藏自治区", "西藏"],
-    ["宁夏回族自治区", "宁夏"],
-    ["新疆维吾尔自治区", "新疆"],
-    ["香港特别行政区", "香港"],
-    ["澳门特别行政区", "澳门"]
-  ];
-  for (const [name, shortName] of provinces) {
-    const candidates = [name, shortName];
-    const matchText = candidates.find((candidate) => text.includes(candidate));
-    if (matchText) return { name, shortName, matchText };
-  }
-  return null;
-}
-
 function findCityName(text, province) {
   if (province && ["北京", "天津", "上海", "重庆", "香港", "澳门"].includes(province.shortName)) {
     return province.name;
@@ -1448,7 +1413,7 @@ function calculateLogisticsChargeWeight(product, purchaseQty, quote) {
 
 function calculateTotalActualWeight(product, purchaseQty) {
   if (!product) return 0;
-  if (product.totalActualWeight) return roundWeight(product.totalActualWeight);
+  if (product.totalActualWeight) return roundWeight(product.totalActualWeight * purchaseQty);
   return roundWeight((product.singleWeight || 0) * purchaseQty);
 }
 
@@ -2114,7 +2079,9 @@ function renderCalculationDetails(row, index) {
   if (!row.calculationDetails?.length) {
     return `<div class="calculation-empty"><strong>${escapeHtml(title)}</strong>：${escapeHtml(row.message || "没有匹配到可用物流报价。")}</div>`;
   }
-  const list = row.calculationDetails.map((detail) => `
+  const displayDetails = row.calculationDetails.slice(0, 4);
+  const hiddenCount = Math.max(0, row.calculationDetails.length - displayDetails.length);
+  const list = displayDetails.map((detail) => `
     <div class="calculation-item ${detail.role === "推荐物流" ? "is-best" : ""}">
       <div class="calculation-title">
         <strong>${escapeHtml(detail.role)}：${escapeHtml(detail.carrier)}</strong>
@@ -2152,7 +2119,10 @@ function renderCalculationDetails(row, index) {
       </div>
     </div>
   `).join("");
-  return `<div class="calculation-box"><div class="calculation-label">${escapeHtml(title)} · 详细计算过程</div><div class="calculation-list">${list}</div></div>`;
+  const hiddenNotice = hiddenCount
+    ? `<div class="calculation-empty">还有 ${hiddenCount} 个备选物流未展示</div>`
+    : "";
+  return `<div class="calculation-box"><div class="calculation-label">${escapeHtml(title)} · 详细计算过程</div><div class="calculation-list">${list}${hiddenNotice}</div></div>`;
 }
 
 function downloadBatchTemplate() {
@@ -2711,31 +2681,6 @@ function formatPercent(value) {
   return `${formatNumber(num * 100)}%`;
 }
 
-function formatCalculationDetailsForExport(row) {
-  if (!row.calculationDetails?.length) return row.message || "";
-  return row.calculationDetails.map((detail) => {
-    const lines = [
-      `${detail.role}：${detail.carrier}`,
-      `报价Sheet：${detail.sheetName || "-"}`,
-      `匹配区域：${detail.matchedRegion || "-"}`,
-      `体积重量：${detail.volumeFormula}`,
-      `计费重量：${detail.chargeFormula}`,
-      `子包裹判断重量：${formatFloorPackageWeightDetails(detail.floorPackageWeights)}`,
-      ...(detail.costLines || []).map((line) => `${line.label}：${line.formula} = ${formatMoney(line.amount)}元`),
-      `基础费用：${formatMoney(detail.baseCost)}元`,
-      `上楼状态：${detail.floorStatus || "-"}`,
-      ...(detail.floorLines || []).map((line) => `${line.label}：${line.formula}${Number.isFinite(Number(line.amount)) ? ` = ${formatMoney(line.amount)}元` : ""}`),
-      `上楼费用：${detail.floorFeeDisplay || formatMoney(detail.floorFee || 0)}`,
-      ...(detail.addonLines || []).map((line) => `${line.label}：${line.formula}${Number.isFinite(Number(line.amount)) ? ` = ${formatMoney(line.amount)}元` : ""}`),
-      `保价费：${detail.insuranceFeeDisplay || formatMoney(detail.insuranceFee || 0)}`,
-      `入仓费：${detail.warehouseFeeDisplay || formatMoney(detail.warehouseFee || 0)}`,
-      `超长超重费：${detail.oversizeFeeDisplay || formatMoney(detail.oversizeFee || 0)}`,
-      `总费用：${formatMoney(detail.cost)}元`
-    ];
-    return lines.join("；");
-  }).join("\n");
-}
-
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
@@ -2747,6 +2692,7 @@ function escapeHtml(value) {
 }
 
 function toast(message) {
+  if (suppressToast) return;
   const old = document.querySelector(".toast");
   if (old) old.remove();
   const node = document.createElement("div");
