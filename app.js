@@ -1384,25 +1384,19 @@ function matchAddress(quote, address) {
   const province = normalizeText(quote.province);
   let score = 0;
   const labels = [];
-  let remaining = normalized;
 
   if (district) {
-    const pos = remaining.indexOf(district);
-    if (pos === -1) return { matched: false, score: 0, label: "" };
-    remaining = remaining.slice(pos + district.length);
+    if (normalized.indexOf(district) === -1) return { matched: false, score: 0, label: "" };
     score += 3;
     labels.push(quote.district);
   }
   if (city) {
-    const pos = remaining.indexOf(city);
-    if (pos === -1) return { matched: false, score: 0, label: "" };
-    remaining = remaining.slice(pos + city.length);
+    if (normalized.indexOf(city) === -1) return { matched: false, score: 0, label: "" };
     score += 2;
     labels.push(quote.city);
   }
   if (province) {
-    const pos = remaining.indexOf(province);
-    if (pos === -1) return { matched: false, score: 0, label: "" };
+    if (normalized.indexOf(province) === -1) return { matched: false, score: 0, label: "" };
     score += 1;
     labels.push(quote.province);
   }
