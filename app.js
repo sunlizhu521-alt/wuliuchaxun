@@ -23,6 +23,7 @@ const state = {
 };
 
 let productInputTimer = null;
+const workbookCache = new Map();
 
 const PRODUCT_SUGGESTION_LIMIT = 12;
 const pinyinCollator = new Intl.Collator("zh-Hans-CN", { sensitivity: "base" });
@@ -131,6 +132,7 @@ function bindEvents() {
 
 async function loadLibrary() {
   if (state.libraryLoading) return;
+  workbookCache.clear();
   state.libraryLoading = true;
   state.libraryReady = false;
   els.runQuery.disabled = true;
@@ -234,9 +236,14 @@ async function sheetsFromRecord(record) {
 }
 
 function workbookFromRecord(record) {
+  if (!record) return null;
+  const cacheKey = record.slotId;
+  if (workbookCache.has(cacheKey)) return workbookCache.get(cacheKey);
   const buffer = getRecordBuffer(record);
   if (!buffer) return null;
-  return readWorkbook(record.fileName, buffer);
+  const wb = readWorkbook(record.fileName, buffer);
+  workbookCache.set(cacheKey, wb);
+  return wb;
 }
 
 function getRecordBuffer(record) {
@@ -1193,13 +1200,14 @@ function compareLogisticsCandidate(a, b) {
 }
 
 function dedupeLogisticsCandidates(candidates) {
-  const seen = new Set();
-  return (candidates || []).filter((item) => {
+  const best = new Map();
+  for (const item of candidates || []) {
     const key = normalizeText(item?.quote?.carrier || item?.quote?.sheetName || "");
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+    if (!key) continue;
+    const existing = best.get(key);
+    if (!existing || item.cost < existing.cost) best.set(key, item);
+  }
+  return Array.from(best.values());
 }
 
 function findOrigin(originName) {
@@ -1382,19 +1390,25 @@ function matchAddress(quote, address) {
   const province = normalizeText(quote.province);
   let score = 0;
   const labels = [];
+  let remaining = normalized;
 
   if (district) {
-    if (!normalized.includes(district)) return { matched: false, score: 0, label: "" };
+    const pos = remaining.indexOf(district);
+    if (pos === -1) return { matched: false, score: 0, label: "" };
+    remaining = remaining.slice(pos + district.length);
     score += 3;
     labels.push(quote.district);
   }
   if (city) {
-    if (!normalized.includes(city)) return { matched: false, score: 0, label: "" };
+    const pos = remaining.indexOf(city);
+    if (pos === -1) return { matched: false, score: 0, label: "" };
+    remaining = remaining.slice(pos + city.length);
     score += 2;
     labels.push(quote.city);
   }
   if (province) {
-    if (!normalized.includes(province)) return { matched: false, score: 0, label: "" };
+    const pos = remaining.indexOf(province);
+    if (pos === -1) return { matched: false, score: 0, label: "" };
     score += 1;
     labels.push(quote.province);
   }
