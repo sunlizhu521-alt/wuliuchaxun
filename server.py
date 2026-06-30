@@ -14,6 +14,16 @@ class Utf8StaticHandler(SimpleHTTPRequestHandler):
         ".md": "text/markdown; charset=utf-8",
     }
 
+    def translate_path(self, path):
+        clean_path = path.split("?", 1)[0].split("#", 1)[0].rstrip("/")
+        route_map = {
+            "/index": "/index.html",
+            "/dimension-library": "/dimension-library.html",
+            "/wuliuchaxun/index": "/wuliuchaxun/index.html",
+            "/wuliuchaxun/dimension-library": "/wuliuchaxun/dimension-library.html",
+        }
+        return super().translate_path(route_map.get(clean_path, path))
+
 
 def main():
     root = os.environ.get("APP_DIR", os.getcwd())
