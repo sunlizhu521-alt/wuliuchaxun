@@ -1528,6 +1528,7 @@ function buildResult(input, origin, product, best, candidates, message) {
     candidateCount: candidates.length,
     backupCarriers: alternatives.map((item) => item.quote.carrier).join("、"),
     backupCosts: alternatives.map(formatBackupCost).join("；"),
+    logisticsCostDetails: candidates.map((item) => formatLogisticsCostDetail(item, item === best)).join("；"),
     calculationDetails: candidates.map((item) => buildCalculationDetail({
       item,
       isBest: item === best,
@@ -1577,6 +1578,21 @@ function formatBackupCost(item) {
   return `${item.quote.carrier}：总费用${formatMoney(item.cost)}，基础费用${formatMoney(item.baseCost)}，上楼费用${item.floorFeeDetail?.displayFee || formatMoney(item.floorFee || 0)}`;
 }
 
+function formatLogisticsCostDetail(item, isBest) {
+  const role = isBest ? "推荐" : "备选";
+  const floorFee = item.floorFeeDetail?.displayFee || formatMoney(item.floorFee || 0);
+  return `${role}-${item.quote.carrier}：总费用${formatMoney(item.cost)}，基础费用${formatMoney(item.baseCost)}，上楼费用${floorFee}`;
+}
+
+function renderLogisticsCostDetails(value) {
+  if (!value) return "-";
+  return String(value)
+    .split("；")
+    .filter(Boolean)
+    .map((item) => `<div>${escapeHtml(item)}</div>`)
+    .join("");
+}
+
 function formatFloorPackageWeights(weights) {
   if (!weights?.length) return "-";
   return weights.map((item) => `体积${item.index}:${formatNumber(item.weight)}kg`).join("；");
@@ -1591,7 +1607,7 @@ function formatFloorPackageWeightDetails(weights) {
 
 function renderResults() {
   if (!state.results.length) {
-    els.resultBody.innerHTML = `<tr><td colspan="21" class="empty">暂无查询结果</td></tr>`;
+    els.resultBody.innerHTML = `<tr><td colspan="20" class="empty">暂无查询结果</td></tr>`;
     renderCalculationSelector();
     els.exportResults.disabled = true;
     return;
@@ -1617,8 +1633,7 @@ function renderResults() {
       <td>${escapeHtml(row.floorFeeDisplay || "")}</td>
       <td>${escapeHtml(row.carrier || "未匹配")}</td>
       <td>${row.cost === "" ? "未匹配" : escapeHtml(row.cost)}</td>
-      <td>${escapeHtml(row.backupCarriers)}</td>
-      <td>${escapeHtml(row.backupCosts)}</td>
+      <td class="logistics-cost-cell">${renderLogisticsCostDetails(row.logisticsCostDetails)}</td>
     </tr>
   `).join("");
   renderCalculationSelector(true);
@@ -2123,8 +2138,7 @@ function getResultExportColumns() {
     ["上楼费用", (row) => row.floorFeeDisplay],
     ["推荐物流", (row) => row.carrier],
     ["预估费用", (row) => row.cost],
-    ["备选物流", (row) => row.backupCarriers],
-    ["备选物流费用", (row) => row.backupCosts]
+    ["物流费用明细", (row) => row.logisticsCostDetails]
   ];
 }
 

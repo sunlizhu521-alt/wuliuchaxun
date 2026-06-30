@@ -506,6 +506,16 @@ th {
   font-weight: 700;
 }
 
+.logistics-cost-cell {
+  min-width: 380px;
+  text-align: left;
+  line-height: 1.55;
+}
+
+.logistics-cost-cell div {
+  white-space: nowrap;
+}
+
 .calculation-box {
   display: grid;
   gap: 8px;
