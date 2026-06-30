@@ -22,6 +22,8 @@ const state = {
   libraryReady: false
 };
 
+let productInputTimer = null;
+
 const PRODUCT_SUGGESTION_LIMIT = 12;
 const pinyinCollator = new Intl.Collator("zh-Hans-CN", { sensitivity: "base" });
 const pinyinInitialBoundaries = [
@@ -92,9 +94,12 @@ function bindEvents() {
   });
   els.citySelect.addEventListener("change", renderDistrictOptions);
   els.productShortNameInput.addEventListener("input", () => {
-    delete els.productShortNameInput.dataset.productIndex;
-    updateProductInfoFields();
-    renderProductSuggestions();
+    clearTimeout(productInputTimer);
+    productInputTimer = setTimeout(() => {
+      delete els.productShortNameInput.dataset.productIndex;
+      updateProductInfoFields();
+      renderProductSuggestions();
+    }, 200);
   });
   els.productShortNameInput.addEventListener("focus", renderProductSuggestions);
   els.productShortNameInput.addEventListener("keydown", handleProductSuggestionKeys);
@@ -289,9 +294,14 @@ function normalizeProductInfo(infoRows = []) {
 }
 
 function normalizeProducts(packageRows, infoItems = []) {
+  const infoMap = new Map();
+  for (const info of infoItems) {
+    if (info.materialCode) infoMap.set(normalizeText(info.materialCode), info);
+    if (info.model) infoMap.set(normalizeText(info.model), info);
+  }
   return packageRows.map((row) => {
     const packageIdentity = normalizeProductIdentity(row);
-    const info = findProductInfo(packageIdentity, infoItems);
+    const info = findProductInfo(packageIdentity, infoMap);
     const model = info?.model || packageIdentity.model || "";
     const materialCodes = packageIdentity.materialCodes;
     const materialCode = materialCodes[0] || packageIdentity.materialCode || "";
@@ -360,14 +370,13 @@ function splitMaterialCodes(value) {
     .filter(Boolean);
 }
 
-function findProductInfo(packageIdentity, infoItems) {
-  if (!infoItems.length) return null;
-  return infoItems.find((item) => (
-    (packageIdentity.materialCodes || [packageIdentity.materialCode])
-      .filter(Boolean)
-      .some((code) => sameText(item.materialCode, code))
-    || (packageIdentity.model && sameText(item.model, packageIdentity.model))
-  )) || null;
+function findProductInfo(packageIdentity, infoMap) {
+  if (!infoMap?.size) return null;
+  for (const code of packageIdentity.materialCodes || [packageIdentity.materialCode]) {
+    const info = infoMap.get(normalizeText(code));
+    if (info) return info;
+  }
+  return packageIdentity.model ? infoMap.get(normalizeText(packageIdentity.model)) || null : null;
 }
 
 function findProductInfoByMaterialCode(materialCode) {
