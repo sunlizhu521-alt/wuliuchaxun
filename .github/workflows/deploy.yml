@@ -23,3 +23,23 @@ jobs:
           TARGET: "/home/ubuntu/zhuge-ai-lab/wuliuchaxun/"
           ARGS: "-rlgoDzvc -i --delete"
           EXCLUDE: "/.git/, /.github/"
+
+      - name: Restart static server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.TENCENT_HOST }}
+          username: ${{ secrets.TENCENT_USER }}
+          key: ${{ secrets.TENCENT_SSH_KEY }}
+          port: ${{ secrets.TENCENT_PORT }}
+          script: |
+            set -e
+            APP_DIR="/home/ubuntu/zhuge-ai-lab/wuliuchaxun"
+            pid=$(ss -ltnp 'sport = :4004' | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' | head -n 1)
+            if [ -n "$pid" ]; then
+              kill "$pid"
+              sleep 1
+            fi
+            cd "$APP_DIR"
+            nohup npx --yes serve "$APP_DIR" -l 4004 > /tmp/wuliuchaxun-serve.log 2>&1 &
+            sleep 3
+            curl -fsS http://127.0.0.1:4004/dimension-library.html | grep -q "维度表文件库"
