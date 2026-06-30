@@ -45,9 +45,10 @@ jobs:
             fi
             sleep 1
             cd "$APP_DIR"
-            nohup python3 -m http.server 4004 --bind 0.0.0.0 --directory "$APP_DIR" > /tmp/wuliuchaxun-serve.log 2>&1 &
+            APP_DIR="$APP_DIR" PORT=4004 nohup python3 "$APP_DIR/server.py" > /tmp/wuliuchaxun-serve.log 2>&1 &
             sleep 5
             ss -ltnp | grep ":4004" || true
             tail -n 40 /tmp/wuliuchaxun-serve.log || true
             curl -fsS http://127.0.0.1:4004/dimension-library.html | grep -q "维度表文件库"
             curl -fsS http://127.0.0.1:4004/wuliuchaxun/dimension-library.html | grep -q "维度表文件库"
+            curl -fsSI http://127.0.0.1:4004/dimension-library.html | grep -qi "charset=utf-8"
