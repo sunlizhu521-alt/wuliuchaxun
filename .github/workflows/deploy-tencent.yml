@@ -1,0 +1,26 @@
+name: Deploy to Tencent Cloud
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy by SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.TENCENT_HOST }}
+          username: ${{ secrets.TENCENT_USER }}
+          key: ${{ secrets.TENCENT_SSH_KEY }}
+          port: ${{ secrets.TENCENT_PORT }}
+          script: |
+            set -e
+            cd /home/ubuntu/zhuge-ai-lab/wuliuchaxun
+            git fetch --prune origin
+            git pull --ff-only origin main
+            echo "Deploy completed at $(date)"
