@@ -3,6 +3,7 @@ const DB_VERSION = 1;
 const STORE_NAME = "dimension-files";
 const SHARED_PACKAGE_NAME = "物流查询维度表共享数据包.json";
 const SHARED_MANIFEST_PATH = "data/shared-library.json";
+const LIBRARY_CACHE_SLOT_ID = "__normalized-library-cache__";
 
 const slots = [
   {
@@ -144,7 +145,9 @@ async function saveRecord(record) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put(normalizeRecord(record));
+    const store = tx.objectStore(STORE_NAME);
+    store.put(normalizeRecord(record));
+    store.delete(LIBRARY_CACHE_SLOT_ID);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -154,7 +157,9 @@ async function deleteRecord(slotId) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).delete(slotId);
+    const store = tx.objectStore(STORE_NAME);
+    store.delete(slotId);
+    store.delete(LIBRARY_CACHE_SLOT_ID);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });

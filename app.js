@@ -8,6 +8,8 @@ const slotIds = {
   productPackage: "dim-product-package",
   logisticsQuote: "quote-sf-hebei"
 };
+const LIBRARY_CACHE_SLOT_ID = "__normalized-library-cache__";
+const LIBRARY_CACHE_VERSION = "20260688";
 
 const state = {
   products: [],
@@ -142,58 +144,80 @@ function bindEvents() {
   });
 }
 
-async function loadLibrary() {
+async function loadLibrary(options = {}) {
+  const allowBackgroundSharedSync = options.allowBackgroundSharedSync !== false;
   if (state.libraryLoading) return;
   state.libraryLoading = true;
   state.libraryReady = false;
   els.runQuery.disabled = true;
   els.reloadLibrary.disabled = true;
-  setLibraryProgress("正在连接维度库...", 10, "loading");
+  setLibraryProgress("正在读取本地维度库...", 10, "loading");
   try {
     await nextFrame();
-    await window.LogisticsSharedLibrary?.importSharedLibrary?.();
-    setLibraryProgress("正在读取已应用的维度文件...", 28, "loading");
+    const directCached = await loadAnyLibrarySnapshotCache().catch((cacheError) => {
+      console.warn("Library direct snapshot cache read skipped:", cacheError);
+      return null;
+    });
+    if (directCached) {
+      applyLibraryData(directCached.data);
+      finishLibraryLoad("cache");
+      if (allowBackgroundSharedSync) syncSharedLibraryInBackground(directCached.signature);
+      return;
+    }
+    let records = await loadAppliedRecords();
+    if (!hasRequiredLibraryRecords(records)) {
+      setLibraryProgress("本地维度不完整，正在同步共享维度库...", 22, "loading");
+      await nextFrame();
+      await window.LogisticsSharedLibrary?.importSharedLibrary?.({ force: true });
+      records = await loadAppliedRecords();
+    }
+    const signature = buildLibrarySignature(records);
+    setLibraryProgress("正在检查维度解析缓存...", 28, "loading");
     await nextFrame();
-    const records = await loadAppliedRecords();
+    const cached = await loadLibrarySnapshotCache(signature).catch((cacheError) => {
+      console.warn("Library snapshot cache read skipped:", cacheError);
+      return null;
+    });
+    if (cached) {
+      applyLibraryData(cached.data);
+      finishLibraryLoad("cache");
+      if (allowBackgroundSharedSync) syncSharedLibraryInBackground(signature);
+      return;
+    }
     setLibraryProgress("正在解析商品信息表...", 45, "loading");
     await nextFrame();
-    const productInfoRows = await rowsFromRecord(records.get(slotIds.productInfo));
-    state.productInfo = normalizeProductInfo(productInfoRows);
+    const productInfoRowsPromise = rowsFromRecord(records.get(slotIds.productInfo));
+    const originRowsPromise = rowsFromRecord(records.get(slotIds.origin));
+    const packageRowsPromise = rowsFromRecord(records.get(slotIds.productPackage));
+    const quoteSheetsPromise = sheetsFromRecord(records.get(slotIds.logisticsQuote));
+    const productInfoRows = await productInfoRowsPromise;
+    const productInfo = normalizeProductInfo(productInfoRows);
     setLibraryProgress("正在解析发货地址表...", 58, "loading");
     await nextFrame();
-    state.origins = normalizeOrigins(await rowsFromRecord(records.get(slotIds.origin)));
+    const origins = normalizeOrigins(await originRowsPromise);
     setLibraryProgress("正在解析商品包装明细...", 72, "loading");
     await nextFrame();
-    state.products = normalizeProducts(
-      await rowsFromRecord(records.get(slotIds.productPackage)),
-      state.productInfo
-    );
+    const products = normalizeProducts(await packageRowsPromise, productInfo);
     setLibraryProgress("正在解析物流公司报价...", 88, "loading");
     await nextFrame();
-    const quoteSheets = await sheetsFromRecord(records.get(slotIds.logisticsQuote));
-    state.quotes = normalizeLogisticsQuoteSheets(quoteSheets);
-    state.floorFees = normalizeFloorFeeSheets(quoteSheets);
-    state.addonFees = normalizeAddonFeeSheets(quoteSheets);
+    const quoteSheets = await quoteSheetsPromise;
+    applyLibraryData({
+      productInfo,
+      origins,
+      products,
+      quotes: normalizeLogisticsQuoteSheets(quoteSheets),
+      floorFees: normalizeFloorFeeSheets(quoteSheets),
+      addonFees: normalizeAddonFeeSheets(quoteSheets)
+    });
+    await saveLibrarySnapshotCache(signature).catch((cacheError) => {
+      console.warn("Library snapshot cache write skipped:", cacheError);
+    });
     // 释放不再需要的二进制数据
     records.forEach((record) => { delete record.fileData; delete record.fileBuffer; });
     workbookCache.clear();
 
-    renderOriginOptions();
-    updateProductInfoFields();
-    const missing = getMissingLibraryParts();
-    state.libraryReady = !missing.length;
-    if (state.libraryReady) {
-      setLibraryProgress(
-        `维度库加载完成：发货地 ${state.origins.length} 个，商品 ${state.products.length} 条，报价 ${state.quotes.length} 条，上楼规则 ${state.floorFees.length} 条，附加费规则 ${state.addonFees.length} 条。`,
-        100,
-        "done"
-      );
-      els.runQuery.disabled = false;
-    } else {
-      setLibraryProgress(`维度库加载完成，但缺少：${missing.join("、")}。请先维护维度表库。`, 100, "warning");
-      els.runQuery.disabled = true;
-    }
-    toast(state.libraryReady ? "维度表已刷新。" : `维度表缺少：${missing.join("、")}`);
+    finishLibraryLoad("parse");
+    if (allowBackgroundSharedSync) syncSharedLibraryInBackground(signature);
   } catch (error) {
     console.error(error);
     setLibraryProgress(error.message || "维度库加载失败，请刷新维度或维护维度表库。", 100, "error");
@@ -229,6 +253,146 @@ async function loadAppliedRecords() {
       resolve(new Map(applied.map((record) => [record.slotId, record])));
     };
     request.onerror = () => reject(request.error);
+  });
+}
+
+function hasRequiredLibraryRecords(records) {
+  return [slotIds.origin, slotIds.productInfo, slotIds.productPackage, slotIds.logisticsQuote]
+    .every((slotId) => records.has(slotId));
+}
+
+function buildLibrarySignature(records) {
+  const parts = [slotIds.origin, slotIds.productInfo, slotIds.productPackage, slotIds.logisticsQuote]
+    .map((slotId) => getRecordSignaturePart(slotId, records.get(slotId)));
+  return JSON.stringify({ version: LIBRARY_CACHE_VERSION, parts });
+}
+
+function getRecordSignaturePart(slotId, record) {
+  if (!record) return { slotId, missing: true };
+  return {
+    slotId,
+    fileName: record.fileName || "",
+    savedAt: record.savedAt || record.appliedAt || record.updatedAt || record.sharedSavedAt || "",
+    sharedSavedAt: record.sharedSavedAt || "",
+    fileSize: record.fileSize || record.fileData?.length || record.fileBuffer?.byteLength || 0
+  };
+}
+
+async function loadLibrarySnapshotCache(signature) {
+  if (!signature) return null;
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const request = tx.objectStore(STORE_NAME).get(LIBRARY_CACHE_SLOT_ID);
+    request.onsuccess = () => {
+      const record = request.result;
+      if (!record || record.signature !== signature || !record.data) {
+        resolve(null);
+        return;
+      }
+      resolve(record);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function loadAnyLibrarySnapshotCache() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const request = tx.objectStore(STORE_NAME).get(LIBRARY_CACHE_SLOT_ID);
+    request.onsuccess = () => {
+      const record = request.result;
+      if (!record || !record.signature || !record.data) {
+        resolve(null);
+        return;
+      }
+      resolve(record);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveLibrarySnapshotCache(signature) {
+  if (!signature) return;
+  const db = await openDB();
+  const record = {
+    slotId: LIBRARY_CACHE_SLOT_ID,
+    signature,
+    data: cloneLibraryDataForCache(),
+    savedAt: new Date().toISOString()
+  };
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).put(record);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function cloneLibraryDataForCache() {
+  return {
+    productInfo: stripRawFields(state.productInfo),
+    origins: stripRawFields(state.origins),
+    products: stripRawFields(state.products),
+    quotes: stripRawFields(state.quotes),
+    floorFees: stripRawFields(state.floorFees),
+    addonFees: stripRawFields(state.addonFees)
+  };
+}
+
+function stripRawFields(value) {
+  if (Array.isArray(value)) return value.map(stripRawFields);
+  if (!value || typeof value !== "object") return value;
+  const output = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (key === "raw") continue;
+    output[key] = stripRawFields(item);
+  }
+  return output;
+}
+
+function applyLibraryData(data = {}) {
+  state.productInfo = Array.isArray(data.productInfo) ? data.productInfo : [];
+  state.origins = Array.isArray(data.origins) ? data.origins : [];
+  state.products = Array.isArray(data.products) ? data.products : [];
+  state.quotes = Array.isArray(data.quotes) ? data.quotes : [];
+  state.floorFees = Array.isArray(data.floorFees) ? data.floorFees : [];
+  state.addonFees = Array.isArray(data.addonFees) ? data.addonFees : [];
+}
+
+function finishLibraryLoad(source) {
+  renderOriginOptions();
+  updateProductInfoFields();
+  const missing = getMissingLibraryParts();
+  state.libraryReady = !missing.length;
+  if (state.libraryReady) {
+    const sourceLabel = source === "cache" ? "快速加载完成" : "解析完成";
+    setLibraryProgress(
+      `维度库${sourceLabel}：发货地 ${state.origins.length} 个，商品 ${state.products.length} 条，报价 ${state.quotes.length} 条，上楼规则 ${state.floorFees.length} 条，附加费规则 ${state.addonFees.length} 条。`,
+      100,
+      "done"
+    );
+    els.runQuery.disabled = false;
+  } else {
+    setLibraryProgress(`维度库加载完成，但缺少：${missing.join("、")}。请先维护维度表库。`, 100, "warning");
+    els.runQuery.disabled = true;
+  }
+  toast(state.libraryReady ? "维度表已刷新。" : `维度表缺少：${missing.join("、")}`);
+}
+
+function syncSharedLibraryInBackground(currentSignature) {
+  const importer = window.LogisticsSharedLibrary?.importSharedLibrary;
+  if (!importer) return;
+  importer().then(async (changed) => {
+    if (!changed || state.libraryLoading) return;
+    const records = await loadAppliedRecords();
+    const nextSignature = buildLibrarySignature(records);
+    if (nextSignature === currentSignature) return;
+    toast("共享维度库有更新，正在重新加载。");
+    await loadLibrary({ allowBackgroundSharedSync: false });
+  }).catch((error) => {
+    console.warn("Shared library background sync skipped:", error);
   });
 }
 
