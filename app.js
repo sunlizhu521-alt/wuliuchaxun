@@ -1885,15 +1885,23 @@ function buildResult(input, origin, product, best, candidates, message) {
     backupCarriers: alternatives.map((item) => item.quote.carrier).join("、"),
     backupCosts: alternatives.map(formatBackupCost).join("；"),
     logisticsCostDetails: candidates.map((item) => formatLogisticsCostDetail(item, item === best)).join("；"),
-    calculationDetails: candidates.map((item) => buildCalculationDetail({
-      item,
-      isBest: item === best,
-      product,
-      purchaseQty,
-      totalActualWeight,
-      totalVolume,
-      purchasedVolume
-    })),
+    calculationDetails: candidates.map((item) => {
+      if (item === best) return buildCalculationDetail({
+        item,
+        isBest: true,
+        product,
+        purchaseQty,
+        totalActualWeight,
+        totalVolume,
+        purchasedVolume
+      });
+      return {
+        carrier: item.quote.carrier || "",
+        role: "备选物流",
+        cost: item.cost,
+        isSummary: true
+      };
+    }),
     message: message || quote.remark || quote.limit || "费用最低"
   };
 }
@@ -2081,7 +2089,17 @@ function renderCalculationDetails(row, index) {
   }
   const displayDetails = row.calculationDetails.slice(0, 4);
   const hiddenCount = Math.max(0, row.calculationDetails.length - displayDetails.length);
-  const list = displayDetails.map((detail) => `
+  const list = displayDetails.map((detail) => {
+    if (detail.isSummary) {
+      return `
+        <div class="calculation-item">
+          <div class="calculation-title">
+            <strong>备选物流：${escapeHtml(detail.carrier)}</strong>
+            <span>总费用 ${escapeHtml(formatMoney(detail.cost))} 元</span>
+          </div>
+        </div>`;
+    }
+    return `
     <div class="calculation-item ${detail.role === "推荐物流" ? "is-best" : ""}">
       <div class="calculation-title">
         <strong>${escapeHtml(detail.role)}：${escapeHtml(detail.carrier)}</strong>
@@ -2118,7 +2136,8 @@ function renderCalculationDetails(row, index) {
         <strong>总费用：${escapeHtml(formatMoney(detail.cost))} 元</strong>
       </div>
     </div>
-  `).join("");
+  `;
+  }).join("");
   const hiddenNotice = hiddenCount
     ? `<div class="calculation-empty">还有 ${hiddenCount} 个备选物流未展示</div>`
     : "";
