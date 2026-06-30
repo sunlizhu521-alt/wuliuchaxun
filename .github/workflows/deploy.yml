@@ -38,7 +38,7 @@ jobs:
             grep -q "维度表文件库" "$APP_DIR/dimension-library.html"
             serve_cmd="ser""ve"
             ss -ltnp | grep ":4004" || true
-            old_pids=$(ps -u "$(whoami)" -o pid=,args= | awk -v svc="$serve_cmd" '$0 ~ /node/ && $0 ~ svc && $0 ~ /4004/ {print $1}')
+            old_pids=$(ss -ltnp | sed -n 's/.*:4004.*pid=\([0-9]\+\).*/\1/p' | sort -u)
             if [ -n "$old_pids" ]; then
               echo "Stopping old static server: $old_pids"
               kill $old_pids
