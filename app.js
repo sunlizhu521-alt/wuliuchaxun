@@ -399,12 +399,6 @@ function findProductInfo(packageIdentity, infoMap) {
   return packageIdentity.model ? infoMap.get(normalizeText(packageIdentity.model)) || null : null;
 }
 
-function findProductInfoByMaterialCode(materialCode) {
-  const code = clean(materialCode);
-  if (!code) return null;
-  return state.productInfo.find((item) => sameText(item.materialCode, code)) || null;
-}
-
 function parsePackages(row) {
   const packages = [];
   for (let index = 1; index <= 20; index += 1) {
@@ -1144,7 +1138,6 @@ function calculateBestOption(input) {
   const match = findProductMatch({ shortName, materialCode });
   const product = match.product;
   const model = product?.model || clean(input.model);
-  const salesSeries = product?.salesSeries || clean(input.salesSeries);
   const addressCheck = validateCustomerAddress(address);
 
   if (!originName) {
@@ -2227,13 +2220,6 @@ function getResultExportColumns() {
   ];
 }
 
-function buildResultExportRow(row, resultColumns) {
-  return resultColumns.reduce((output, [label, getter]) => {
-    output[label] = getter(row);
-    return output;
-  }, {});
-}
-
 function buildSingleResultRows(resultColumns) {
   const headers = resultColumns.map(([label]) => label);
   const data = state.results.map((row) => resultColumns.map(([, getter]) => getter(row)));
@@ -2318,19 +2304,6 @@ function normalizeQuoteZone(value) {
 
 function sameText(a, b) {
   return normalizeText(a) === normalizeText(b);
-}
-
-function normalizeProductKey(value) {
-  return String(value || "")
-    .normalize("NFKC")
-    .replace(/\s+/g, "")
-    .replace(/[‐‑‒–—―－_]/g, "-")
-    .replace(/-/g, "")
-    .toLowerCase();
-}
-
-function sameProductKey(a, b) {
-  return normalizeProductKey(a) === normalizeProductKey(b);
 }
 
 function clean(value) {
