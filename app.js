@@ -1083,34 +1083,50 @@ async function importBatchFile(file) {
     const rows = XLSX.utils.sheet_to_json(worksheet, { defval: "", raw: false });
     const headers = getWorksheetHeaders(worksheet);
     state.batchImportHeaders = headers;
-    const hasAddress = headers.some((header) => header && (header.includes("地址") || header.includes("顾客")));
-    const hasShortName = headers.some((header) => header && (header.includes("货品简称") || header.includes("简称")));
+
+    const hasAddress = headers.some((h) => h && (h.includes("地址") || h.includes("顾客")));
+    const hasShortName = headers.some((h) => h && (h.includes("货品简称") || h.includes("简称")));
     if (!hasAddress || !hasShortName) {
       toast(`导入文件缺少必填列：${[!hasAddress && "顾客地址", !hasShortName && "货品简称"].filter(Boolean).join("、")}`);
       return;
     }
+
+    state.results = [];
+    els.runQuery.disabled = true;
     suppressToast = true;
-    state.results = rows.map((row, index) => {
-      const result = calculateBestOption({
-        origin: pick(row, ["发货地", "供应商简称", "发货仓", "仓库"]) || els.originSelect.value,
-        elevatorService: pick(row, ["是否上楼", "上楼服务", "上楼", "需上楼"]) || els.elevatorSelect.value,
-        floorType: pick(row, ["楼梯类型", "上楼类型", "楼梯"]) || els.floorTypeSelect.value,
-        address: pick(row, ["顾客地址", "客户地址", "收货地址", "地址"]) || "",
-        shortName: pick(row, ["货品简称", "货品名称简称", "货品简名", "简称"]) || "",
-        purchaseQty: parsePurchaseQty(pick(row, ["购买件数", "商品购买件数", "件数", "数量"]))
+    const batchSize = 20;
+    for (let i = 0; i < rows.length; i += batchSize) {
+      const chunk = rows.slice(i, i + batchSize);
+      const chunkResults = chunk.map((row, chunkIndex) => {
+        const result = calculateBestOption({
+          origin: pick(row, ["发货地", "供应商简称", "发货仓", "仓库"]) || els.originSelect.value,
+          elevatorService: pick(row, ["是否上楼", "上楼服务", "上楼", "需上楼"]) || els.elevatorSelect.value,
+          floorType: pick(row, ["楼梯类型", "上楼类型", "楼梯"]) || els.floorTypeSelect.value,
+          address: pick(row, ["顾客地址", "客户地址", "收货地址", "地址"]) || "",
+          shortName: pick(row, ["货品简称", "货品名称简称", "货品简名", "简称"]) || "",
+          purchaseQty: parsePurchaseQty(pick(row, ["购买件数", "商品购买件数", "件数", "数量"]))
+        });
+        const globalIndex = i + chunkIndex;
+        result.importSource = {
+          rowNumber: globalIndex + 2,
+          headers,
+          row: buildImportSourceRow(row, headers)
+        };
+        return result;
       });
-      result.importSource = {
-        rowNumber: index + 2,
-        headers,
-        row: buildImportSourceRow(row, headers)
-      };
-      return result;
-    });
+      state.results.push(...chunkResults);
+      const progress = Math.round((i + chunk.length) / rows.length * 100);
+      setQueryProgress(`正在批量查询 ${i + chunk.length}/${rows.length}...`, progress, "loading");
+      await nextFrame();
+    }
     suppressToast = false;
+    els.runQuery.disabled = !state.libraryReady;
     renderResults();
+    setQueryProgress(`批量查询完成，共 ${state.results.length} 条。`, 100, "done");
     toast(`已导入 ${state.results.length} 条地址查询。`);
   } catch (error) {
     suppressToast = false;
+    els.runQuery.disabled = !state.libraryReady;
     console.error(error);
     toast(error.message || "导入失败");
   }
