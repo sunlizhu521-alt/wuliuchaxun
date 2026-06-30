@@ -517,10 +517,11 @@ function normalizeLogisticsQuoteRow(row, sheetMeta, sheetName) {
       originName: sheetMeta.originName,
       carrier: sheetMeta.carrier,
       quoteZone: sheetMeta.originName,
-      province: clean(pick(row, ["目的省", "省", "省份", "收货省"])),
-      city: clean(pick(row, ["目的市", "市", "城市", "收货市"])),
+      province: clean(pick(row, ["目的省", "目的省份", "省", "省份", "收货省", "最新报价", "26年5月顺丰"])),
+      city: clean(pick(row, ["目的市", "目的城市", "市", "城市", "收货市"])),
       district: clean(pick(row, ["目的区", "区", "区县", "目的区县", "收货区县"])),
       bubbleRatio: parseNumber(pick(row, ["泡比", "抛比", "体积泡比", "材积系数"])),
+      discount: parseDiscount(pick(row, ["折扣", "报价折扣", "运费折扣"])),
       firstWeight: priceRule.firstWeight,
       firstFee: priceRule.firstFee,
       steps: priceRule.steps,
@@ -542,25 +543,35 @@ function parseWeightPriceRule(row) {
     const fee = parseNumber(value);
     if (!fee) continue;
     const text = normalizeHeaderText(header);
-    const firstMatch = text.match(/^首重(?:[（(])?\s*(\d+(?:\.\d+)?)\s*kg?\s*(?:[）)])?$/i);
-    if (firstMatch) {
-      rule.firstWeight = Number(firstMatch[1]);
+    if (text.includes("首重")) {
+      const numbers = extractHeaderNumbers(text);
+      rule.firstWeight = numbers.length ? numbers[numbers.length - 1] : 1;
       rule.firstFee = fee;
       continue;
     }
-    const rangeMatch = text.match(/^续重[（(]\s*(\d+(?:\.\d+)?)\s*[-~至]\s*(\d+(?:\.\d+)?)\s*kg\s*[）)]$/i);
-    if (rangeMatch) {
+    if (!text.includes("续重")) continue;
+    const numbers = extractHeaderNumbers(text);
+    const hasRange = /[-~至]/.test(text);
+    if (hasRange && numbers.length >= 2) {
       rule.steps.push({
-        from: Number(rangeMatch[1]),
-        to: Number(rangeMatch[2]),
+        from: numbers[numbers.length - 2],
+        to: numbers[numbers.length - 1],
         fee
       });
       continue;
     }
-    const aboveMatch = text.match(/^续重[（(]\s*(\d+(?:\.\d+)?)\s*(?:kg)?\s*以上\s*[）)]$/i);
-    if (aboveMatch) {
+    const hasAbove = text.includes("以上") || text.includes(">=") || text.includes("＞=") || text.includes(">");
+    if (hasAbove && numbers.length >= 1) {
       rule.steps.push({
-        from: Number(aboveMatch[1]),
+        from: numbers[numbers.length - 1],
+        to: Number.POSITIVE_INFINITY,
+        fee
+      });
+      continue;
+    }
+    if (!numbers.length) {
+      rule.steps.push({
+        from: rule.firstWeight || 1,
         to: Number.POSITIVE_INFINITY,
         fee
       });
@@ -573,10 +584,15 @@ function parseWeightPriceRule(row) {
 
 function normalizeHeaderText(value) {
   return String(value || "")
-    .replace(/\s+/g, "")
-    .replace(/ＫＧ/gi, "kg")
-    .replace(/公斤/g, "kg")
+    .normalize("NFKC")
+    .replace(/公斤|千克/gi, "kg")
+    .replace(/\s+/g, " ")
+    .toLowerCase()
     .trim();
+}
+
+function extractHeaderNumbers(value) {
+  return Array.from(String(value || "").matchAll(/\d+(?:\.\d+)?/g)).map((match) => Number(match[0]));
 }
 
 function renderOriginOptions() {
@@ -1341,6 +1357,7 @@ function calculateCostDetail(quote, weight) {
     firstWeight: quote?.firstWeight || 0,
     firstFee: quote?.firstFee || 0,
     minFee: quote?.minFee || 0,
+    discount: quote?.discount || 1,
     chargeWeight: weight,
     lines: [],
     subtotal: Number.NaN,
@@ -1372,6 +1389,15 @@ function calculateCostDetail(quote, weight) {
     }
   }
   detail.subtotal = roundMoney(cost);
+  if (quote.discount && quote.discount !== 1) {
+    const discounted = cost * quote.discount;
+    detail.lines.push({
+      label: "报价折扣",
+      formula: `${formatNumber(cost)} × ${formatPercent(quote.discount)}`,
+      amount: roundMoney(discounted - cost)
+    });
+    cost = discounted;
+  }
   if (quote.minFee && cost < quote.minFee) {
     detail.lines.push({
       label: "最低收费调整",
