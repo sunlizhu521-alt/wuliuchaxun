@@ -2095,9 +2095,7 @@ function renderCalculationDetails(row, index) {
   if (!row.calculationDetails?.length) {
     return `<div class="calculation-empty"><strong>${escapeHtml(title)}</strong>：${escapeHtml(row.message || "没有匹配到可用物流报价。")}</div>`;
   }
-  const displayDetails = row.calculationDetails.slice(0, 4);
-  const hiddenCount = Math.max(0, row.calculationDetails.length - displayDetails.length);
-  const list = displayDetails.map((detail) => `
+  const list = row.calculationDetails.map((detail) => `
     <div class="calculation-item ${detail.role === "推荐物流" ? "is-best" : ""}">
       <div class="calculation-title">
         <strong>${escapeHtml(detail.role)}：${escapeHtml(detail.carrier)}</strong>
@@ -2135,10 +2133,7 @@ function renderCalculationDetails(row, index) {
       </div>
     </div>
   `).join("");
-  const hiddenNotice = hiddenCount
-    ? `<div class="calculation-empty">还有 ${hiddenCount} 个备选物流未展示</div>`
-    : "";
-  return `<div class="calculation-box"><div class="calculation-label">${escapeHtml(title)} · 详细计算过程</div><div class="calculation-list">${list}${hiddenNotice}</div></div>`;
+  return `<div class="calculation-box"><div class="calculation-label">${escapeHtml(title)} · 详细计算过程</div><div class="calculation-list">${list}</div></div>`;
 }
 
 function downloadBatchTemplate() {
