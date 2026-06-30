@@ -2143,6 +2143,18 @@ function downloadBatchTemplate() {
     { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 14 },
     { wch: 30 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 22 }
   ];
+  ws1["!dataValidation"] = [
+    { sqref: "H2:H501", type: "list", formula1: '"需上楼,无需上楼"', allowBlank: 1 },
+    { sqref: "I2:I501", type: "list", formula1: '"电梯,步行梯"', allowBlank: 1 }
+  ];
+  if (originNames.length) {
+    ws1["!dataValidation"].push({
+      sqref: "K2:K501",
+      type: "list",
+      formula1: `发货地选项!$A$1:$A$${originNames.length}`,
+      allowBlank: 1
+    });
+  }
   XLSX.utils.book_append_sheet(wb, ws1, "地址查询导入模板");
   const ws2 = XLSX.utils.aoa_to_sheet(originRows);
   XLSX.utils.book_append_sheet(wb, ws2, "发货地选项");
