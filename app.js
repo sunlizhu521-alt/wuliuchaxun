@@ -279,7 +279,7 @@ async function getCacheRecord() {
 async function saveLibraryCache(records, signature) {
   try {
     const db = await openDB();
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
       tx.objectStore(STORE_NAME).put({
         slotId: CACHE_SLOT_ID,
@@ -290,17 +290,11 @@ async function saveLibraryCache(records, signature) {
         productPackageAppliedAt: records.get(slotIds.productPackage)?.appliedAt || null,
         logisticsQuoteAppliedAt: records.get(slotIds.logisticsQuote)?.appliedAt || null,
         data: cloneLibraryDataForCache(),
-        productInfo: stripRawFields(state.productInfo),
-        origins: stripRawFields(state.origins),
-        products: stripRawFields(state.products),
-        quotes: stripRawFields(state.quotes),
-        floorFees: stripRawFields(state.floorFees),
-        addonFees: stripRawFields(state.addonFees),
         cachedAt: new Date().toISOString(),
         savedAt: new Date().toISOString()
       });
       tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
+      tx.onerror = () => reject(tx.error);
     });
   } catch {
     // 缓存保存失败不影响主流程
