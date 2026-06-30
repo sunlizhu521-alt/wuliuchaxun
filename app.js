@@ -73,6 +73,16 @@ const els = {
 init();
 
 async function init() {
+  // 等待 china-regions.js 加载完成
+  if (!window.CHINA_REGIONS) {
+    await new Promise((resolve) => {
+      const check = () => {
+        if (window.CHINA_REGIONS) resolve();
+        else setTimeout(check, 50);
+      };
+      check();
+    });
+  }
   bindEvents();
   renderProvinceOptions();
   updateFloorTypeState();
@@ -1236,7 +1246,10 @@ function buildImportSourceRow(row, headers) {
 function matchesQuoteOrigin(quote, originName) {
   const quoteOrigin = normalizeText(quote.originName);
   const origin = normalizeText(originName);
-  return quoteOrigin === origin || quoteOrigin.includes(origin) || origin.includes(quoteOrigin);
+  if (quoteOrigin === origin) return true;
+  if (quoteOrigin.length > origin.length) return quoteOrigin.includes(origin);
+  if (origin.length > quoteOrigin.length) return origin.includes(quoteOrigin);
+  return false;
 }
 
 function validateCustomerAddress(address) {
@@ -1376,7 +1389,12 @@ function scoreProductCandidate(product, normalizedQuery, initialQuery) {
 }
 
 function getProductSearchFields(product) {
-  return product?.shortName ? [product.shortName] : [];
+  const fields = [];
+  if (product?.shortName) fields.push(product.shortName);
+  if (product?.materialCode) fields.push(product.materialCode);
+  if (product?.model) fields.push(product.model);
+  if (product?.name && product.name !== product.shortName) fields.push(product.name);
+  return fields;
 }
 
 function productDisplayName(product) {
