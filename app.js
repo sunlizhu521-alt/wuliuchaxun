@@ -1127,13 +1127,29 @@ function calculateBestOption(input) {
     })
     .filter(Boolean)
     .filter((item) => Number.isFinite(item.cost))
-    .sort((a, b) => a.cost - b.cost || b.match.score - a.match.score || a.quote.carrier.localeCompare(b.quote.carrier, "zh-CN"));
+    .sort(compareLogisticsCandidate);
 
-  if (!candidates.length) {
+  const uniqueCandidates = dedupeLogisticsCandidates(candidates);
+
+  if (!uniqueCandidates.length) {
     return buildResult(input, origin, product, null, [], "没有匹配到可用物流报价。");
   }
 
-  return buildResult(input, origin, product, candidates[0], candidates, "");
+  return buildResult(input, origin, product, uniqueCandidates[0], uniqueCandidates, "");
+}
+
+function compareLogisticsCandidate(a, b) {
+  return a.cost - b.cost || b.match.score - a.match.score || a.quote.carrier.localeCompare(b.quote.carrier, "zh-CN");
+}
+
+function dedupeLogisticsCandidates(candidates) {
+  const seen = new Set();
+  return (candidates || []).filter((item) => {
+    const key = normalizeText(item?.quote?.carrier || item?.quote?.sheetName || "");
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function findOrigin(originName) {
