@@ -36,11 +36,14 @@ jobs:
             APP_DIR="/home/ubuntu/zhuge-ai-lab/wuliuchaxun"
             ls -la "$APP_DIR/dimension-library.html"
             grep -q "维度表文件库" "$APP_DIR/dimension-library.html"
-            pkill -f "[n]ode .*serve.*4004" || true
-            pkill -f "[s]erve .*4004" || true
+            serve_cmd="ser""ve"
+            old_pids=$(pgrep -f "node .*${serve_cmd}.*4004" || true)
+            if [ -n "$old_pids" ]; then
+              kill $old_pids
+            fi
             sleep 1
             cd "$APP_DIR"
-            nohup npx --yes serve -l 4004 "$APP_DIR" > /tmp/wuliuchaxun-serve.log 2>&1 &
+            nohup npx --yes "$serve_cmd" -l 4004 "$APP_DIR" > /tmp/wuliuchaxun-serve.log 2>&1 &
             sleep 5
             ss -ltnp | grep ":4004" || true
             tail -n 40 /tmp/wuliuchaxun-serve.log || true
