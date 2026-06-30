@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>权限管理 - 物流查询系统</title>
+  <link rel="stylesheet" href="styles.css?v=20260687">
+</head>
+<body class="file-library-page permission-page-body">
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <strong>物流查询系统</strong>
+        <span>用户与页面权限</span>
+      </div>
+      <nav class="nav">
+        <a href="index.html?v=20260687">物流查询</a>
+        <a href="dimension-library.html?v=20260687">维度表库</a>
+        <a class="active" href="permission-management.html?v=20260687">权限管理</a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <h1>权限管理</h1>
+          <p>管理注册用户的页面访问权限；新注册用户默认待授权。</p>
+        </div>
+        <div class="topbar-actions">
+          <button id="refreshUsersBtn" class="secondary" type="button">刷新用户</button>
+        </div>
+      </header>
+
+      <section class="library-summary permission-create-panel">
+        <div class="summary-head">
+          <div>
+            <span class="summary-eyebrow">USER ACCESS</span>
+            <h2>创建用户</h2>
+          </div>
+          <span id="permissionSummary" class="saved-badge">正在读取用户</span>
+        </div>
+        <div class="permission-create-form">
+          <label class="field">
+            <span>姓名</span>
+            <input id="newUserName" type="text" autocomplete="off" placeholder="输入姓名">
+          </label>
+          <label class="field">
+            <span>初始密码</span>
+            <input id="newUserPassword" type="password" autocomplete="new-password" placeholder="至少 4 位">
+          </label>
+          <button id="createUserBtn" type="button">创建用户</button>
+        </div>
+      </section>
+
+      <section class="library-summary permission-table-panel">
+        <div class="summary-head">
+          <div>
+            <span class="summary-eyebrow">PERMISSIONS</span>
+            <h2>注册用户</h2>
+          </div>
+        </div>
+        <div class="permission-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>用户</th>
+                <th>角色</th>
+                <th>状态</th>
+                <th>可访问页面</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="permissionUserBody">
+              <tr><td colspan="5" class="empty">正在加载用户</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="auth.js?v=20260687"></script>
+  <script src="permission-management.js?v=20260687"></script>
+</body>
+</html>

@@ -83,6 +83,7 @@ let records = new Map();
 init();
 
 async function init() {
+  if (window.LogisticsAuth && !window.LogisticsAuth.requirePage("dimensionLibrary")) return;
   try {
     sharedStatus.textContent = "正在同步共享文件库...";
     await window.LogisticsSharedLibrary?.importSharedLibrary?.();

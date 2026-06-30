@@ -35,7 +35,9 @@ jobs:
             set -e
             APP_DIR="/home/ubuntu/zhuge-ai-lab/wuliuchaxun"
             ls -la "$APP_DIR/dimension-library.html"
+            ls -la "$APP_DIR/permission-management.html"
             grep -q "维度表文件库" "$APP_DIR/dimension-library.html"
+            grep -q "权限管理" "$APP_DIR/permission-management.html"
             ln -sfn "$APP_DIR" "$APP_DIR/wuliuchaxun"
             ss -ltnp | grep ":4004" || true
             old_pids=$(ss -ltnp | sed -n 's/.*:4004.*pid=\([0-9]\+\).*/\1/p' | sort -u)
@@ -50,5 +52,8 @@ jobs:
             ss -ltnp | grep ":4004" || true
             tail -n 40 /tmp/wuliuchaxun-serve.log || true
             curl -fsS http://127.0.0.1:4004/dimension-library.html | grep -q "维度表文件库"
+            curl -fsS http://127.0.0.1:4004/permission-management.html | grep -q "权限管理"
             curl -fsS http://127.0.0.1:4004/wuliuchaxun/dimension-library.html | grep -q "维度表文件库"
+            curl -fsS http://127.0.0.1:4004/wuliuchaxun/permission-management.html | grep -q "权限管理"
             curl -fsSI http://127.0.0.1:4004/dimension-library.html | grep -qi "charset=utf-8"
+            curl -fsSI http://127.0.0.1:4004/permission-management.html | grep -qi "charset=utf-8"

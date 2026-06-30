@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>物流查询系统</title>
-  <link rel="stylesheet" href="styles.css?v=20260672">
+  <link rel="stylesheet" href="styles.css?v=20260687">
 </head>
 <body>
   <div class="app-shell">
@@ -17,8 +17,9 @@
         </div>
       </div>
       <nav class="nav">
-        <a class="active" href="index.html?v=20260643">物流查询</a>
-        <a href="dimension-library.html?v=20260644">维度表库</a>
+        <a class="active" href="index.html?v=20260687">物流查询</a>
+        <a href="dimension-library.html?v=20260687">维度表库</a>
+        <a href="permission-management.html?v=20260687">权限管理</a>
       </nav>
     </aside>
 
@@ -39,7 +40,7 @@
         </div>
         <div class="header-actions">
           <button class="button" id="reloadLibrary">刷新维度</button>
-          <a class="button ghost" href="dimension-library.html?v=20260644">维护维度表</a>
+          <a class="button ghost" href="dimension-library.html?v=20260687">维护维度表</a>
         </div>
       </header>
 
@@ -214,8 +215,9 @@
   </div>
 
   <script src="vendor/xlsx.full.min.js"></script>
+  <script src="auth.js?v=20260687"></script>
   <script src="shared-library.js?v=20260623"></script>
   <script src="china-regions.js?v=20260643" defer></script>
-  <script src="app.js?v=20260686"></script>
+  <script src="app.js?v=20260687"></script>
 </body>
 </html>

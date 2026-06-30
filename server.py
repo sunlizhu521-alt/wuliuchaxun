@@ -19,8 +19,13 @@ class Utf8StaticHandler(SimpleHTTPRequestHandler):
         route_map = {
             "/index": "/index.html",
             "/dimension-library": "/dimension-library.html",
-            "/wuliuchaxun/index": "/wuliuchaxun/index.html",
-            "/wuliuchaxun/dimension-library": "/wuliuchaxun/dimension-library.html",
+            "/permission-management": "/permission-management.html",
+            "/wuliuchaxun/index": "/index.html",
+            "/wuliuchaxun/index.html": "/index.html",
+            "/wuliuchaxun/dimension-library": "/dimension-library.html",
+            "/wuliuchaxun/dimension-library.html": "/dimension-library.html",
+            "/wuliuchaxun/permission-management": "/permission-management.html",
+            "/wuliuchaxun/permission-management.html": "/permission-management.html",
         }
         return super().translate_path(route_map.get(clean_path, path))
 

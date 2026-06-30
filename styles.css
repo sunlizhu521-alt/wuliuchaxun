@@ -920,6 +920,109 @@ th {
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
 }
 
+.session-panel {
+  display: grid;
+  gap: 4px;
+  margin-top: 24px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, .10);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .06);
+  color: #d9e2f2;
+}
+
+.session-panel span,
+.session-panel small {
+  color: #b6c2d4;
+  font-size: 12px;
+}
+
+.session-panel strong {
+  color: #fff;
+  font-size: 15px;
+}
+
+.session-panel button {
+  min-height: 32px;
+  margin-top: 6px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .08);
+  color: #fff;
+  cursor: pointer;
+}
+
+.auth-page {
+  min-height: 100vh;
+  background: #f2f5f9;
+}
+
+.auth-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-panel {
+  display: grid;
+  width: min(440px, 100%);
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid #d8e0ea;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, .12);
+}
+
+.auth-panel h1 {
+  margin: 0;
+  font-size: 26px;
+}
+
+.auth-panel p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.auth-tabs button {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbff;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.auth-tabs button.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.auth-message {
+  min-height: 20px;
+  color: var(--danger) !important;
+  font-size: 13px;
+}
+
+.auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.waiting-panel {
+  text-align: left;
+}
+
 @media (max-width: 980px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -1410,6 +1513,108 @@ body.file-library-page {
   font-size: 13px;
 }
 
+.permission-create-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(180px, 240px) auto 1fr;
+  gap: 12px;
+  align-items: end;
+}
+
+.permission-table-wrap {
+  overflow-x: auto;
+}
+
+.permission-table-wrap table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.permission-table-wrap th,
+.permission-table-wrap td {
+  padding: 11px 12px;
+  border: 1px solid #dce4ef;
+  text-align: left;
+  vertical-align: top;
+}
+
+.permission-table-wrap th {
+  background: #eef6ff;
+  color: #1f2933;
+  white-space: nowrap;
+}
+
+.permission-table-wrap td strong,
+.permission-table-wrap td small {
+  display: block;
+}
+
+.permission-table-wrap td small {
+  margin-top: 4px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.permission-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.permission-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #344054;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.permission-checkbox input {
+  width: 15px;
+  height: 15px;
+}
+
+.permission-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #edf2f6;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.permission-status.active {
+  background: #dff8ea;
+  color: #14805e;
+}
+
+.permission-status.pending {
+  background: #fff2cc;
+  color: #b45309;
+}
+
+.permission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.permission-actions button {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.permission-table-wrap tr.is-dirty {
+  background: #fffbeb;
+}
+
 @media (min-width: 981px) and (max-width: 1320px) {
   .file-library-page .library-grid {
     grid-template-columns: repeat(2, minmax(240px, 1fr));
@@ -1440,6 +1645,11 @@ body.file-library-page {
     align-items: stretch;
     flex-direction: column;
   }
+
+  .permission-create-form,
+  .permission-checkbox-grid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1454,5 +1664,10 @@ body.file-library-page {
 
   .file-library-page .topbar-actions {
     display: grid;
+  }
+
+  .permission-create-form,
+  .permission-checkbox-grid {
+    grid-template-columns: 1fr;
   }
 }

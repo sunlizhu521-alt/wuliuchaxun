@@ -74,6 +74,7 @@ const els = {
 init();
 
 async function init() {
+  if (window.LogisticsAuth && !window.LogisticsAuth.requirePage("query")) return;
   // 等待 china-regions.js 加载完成
   if (!window.CHINA_REGIONS) {
     await new Promise((resolve) => {
