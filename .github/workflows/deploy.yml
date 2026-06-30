@@ -36,6 +36,7 @@ jobs:
             APP_DIR="/home/ubuntu/zhuge-ai-lab/wuliuchaxun"
             ls -la "$APP_DIR/dimension-library.html"
             grep -q "维度表文件库" "$APP_DIR/dimension-library.html"
+            ln -sfn "$APP_DIR" "$APP_DIR/wuliuchaxun"
             ss -ltnp | grep ":4004" || true
             old_pids=$(ss -ltnp | sed -n 's/.*:4004.*pid=\([0-9]\+\).*/\1/p' | sort -u)
             if [ -n "$old_pids" ]; then
@@ -49,3 +50,4 @@ jobs:
             ss -ltnp | grep ":4004" || true
             tail -n 40 /tmp/wuliuchaxun-serve.log || true
             curl -fsS http://127.0.0.1:4004/dimension-library.html | grep -q "维度表文件库"
+            curl -fsS http://127.0.0.1:4004/wuliuchaxun/dimension-library.html | grep -q "维度表文件库"
