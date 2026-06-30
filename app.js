@@ -1,6 +1,7 @@
 const DB_NAME = "logistics-query-dimension-library";
 const DB_VERSION = 1;
 const STORE_NAME = "dimension-files";
+const CACHE_SLOT_ID = "__normalized-library-cache__";
 
 const slotIds = {
   origin: "dim-origin-address",
@@ -8,8 +9,8 @@ const slotIds = {
   productPackage: "dim-product-package",
   logisticsQuote: "quote-sf-hebei"
 };
-const LIBRARY_CACHE_SLOT_ID = "__normalized-library-cache__";
-const LIBRARY_CACHE_VERSION = "20260688";
+const LIBRARY_CACHE_SLOT_ID = CACHE_SLOT_ID;
+const LIBRARY_CACHE_VERSION = "20260689";
 
 const state = {
   products: [],
@@ -174,7 +175,7 @@ async function loadLibrary(options = {}) {
     const signature = buildLibrarySignature(records);
     setLibraryProgress("正在检查维度解析缓存...", 28, "loading");
     await nextFrame();
-    const cached = await loadLibrarySnapshotCache(signature).catch((cacheError) => {
+    const cached = await loadLibrarySnapshotCache(signature, records).catch((cacheError) => {
       console.warn("Library snapshot cache read skipped:", cacheError);
       return null;
     });
@@ -209,7 +210,7 @@ async function loadLibrary(options = {}) {
       floorFees: normalizeFloorFeeSheets(quoteSheets),
       addonFees: normalizeAddonFeeSheets(quoteSheets)
     });
-    await saveLibrarySnapshotCache(signature).catch((cacheError) => {
+    await saveLibrarySnapshotCache(signature, records).catch((cacheError) => {
       console.warn("Library snapshot cache write skipped:", cacheError);
     });
     // 释放不再需要的二进制数据
@@ -261,10 +262,69 @@ function hasRequiredLibraryRecords(records) {
     .every((slotId) => records.has(slotId));
 }
 
+async function getCacheRecord() {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const request = tx.objectStore(STORE_NAME).get(CACHE_SLOT_ID);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function saveLibraryCache(records, signature) {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).put({
+        slotId: CACHE_SLOT_ID,
+        cacheVersion: LIBRARY_CACHE_VERSION,
+        signature,
+        productInfoAppliedAt: records.get(slotIds.productInfo)?.appliedAt || null,
+        originAppliedAt: records.get(slotIds.origin)?.appliedAt || null,
+        productPackageAppliedAt: records.get(slotIds.productPackage)?.appliedAt || null,
+        logisticsQuoteAppliedAt: records.get(slotIds.logisticsQuote)?.appliedAt || null,
+        data: cloneLibraryDataForCache(),
+        productInfo: stripRawFields(state.productInfo),
+        origins: stripRawFields(state.origins),
+        products: stripRawFields(state.products),
+        quotes: stripRawFields(state.quotes),
+        floorFees: stripRawFields(state.floorFees),
+        addonFees: stripRawFields(state.addonFees),
+        cachedAt: new Date().toISOString(),
+        savedAt: new Date().toISOString()
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch {
+    // 缓存保存失败不影响主流程
+  }
+}
+
 function buildLibrarySignature(records) {
   const parts = [slotIds.origin, slotIds.productInfo, slotIds.productPackage, slotIds.logisticsQuote]
     .map((slotId) => getRecordSignaturePart(slotId, records.get(slotId)));
   return JSON.stringify({ version: LIBRARY_CACHE_VERSION, parts });
+}
+
+function isCacheRecordValidForRecords(cacheRecord, records) {
+  if (!cacheRecord || !records) return false;
+  const ri = records.get(slotIds.productInfo);
+  const ro = records.get(slotIds.origin);
+  const rp = records.get(slotIds.productPackage);
+  const rq = records.get(slotIds.logisticsQuote);
+  return (
+    cacheRecord.productInfoAppliedAt === (ri?.appliedAt || null)
+    && cacheRecord.originAppliedAt === (ro?.appliedAt || null)
+    && cacheRecord.productPackageAppliedAt === (rp?.appliedAt || null)
+    && cacheRecord.logisticsQuoteAppliedAt === (rq?.appliedAt || null)
+  );
 }
 
 function getRecordSignaturePart(slotId, record) {
@@ -278,22 +338,12 @@ function getRecordSignaturePart(slotId, record) {
   };
 }
 
-async function loadLibrarySnapshotCache(signature) {
+async function loadLibrarySnapshotCache(signature, records) {
   if (!signature) return null;
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const request = tx.objectStore(STORE_NAME).get(LIBRARY_CACHE_SLOT_ID);
-    request.onsuccess = () => {
-      const record = request.result;
-      if (!record || record.signature !== signature || !record.data) {
-        resolve(null);
-        return;
-      }
-      resolve(record);
-    };
-    request.onerror = () => reject(request.error);
-  });
+  const record = await getCacheRecord();
+  if (!record || record.signature !== signature || !record.data) return null;
+  if (!isCacheRecordValidForRecords(record, records)) return null;
+  return record;
 }
 
 async function loadAnyLibrarySnapshotCache() {
@@ -303,7 +353,7 @@ async function loadAnyLibrarySnapshotCache() {
     const request = tx.objectStore(STORE_NAME).get(LIBRARY_CACHE_SLOT_ID);
     request.onsuccess = () => {
       const record = request.result;
-      if (!record || !record.signature || !record.data) {
+      if (!record || record.cacheVersion !== LIBRARY_CACHE_VERSION || !record.signature || !record.data) {
         resolve(null);
         return;
       }
@@ -313,21 +363,9 @@ async function loadAnyLibrarySnapshotCache() {
   });
 }
 
-async function saveLibrarySnapshotCache(signature) {
+async function saveLibrarySnapshotCache(signature, records) {
   if (!signature) return;
-  const db = await openDB();
-  const record = {
-    slotId: LIBRARY_CACHE_SLOT_ID,
-    signature,
-    data: cloneLibraryDataForCache(),
-    savedAt: new Date().toISOString()
-  };
-  await new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put(record);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  await saveLibraryCache(records, signature);
 }
 
 function cloneLibraryDataForCache() {
