@@ -2129,342 +2129,27 @@ function downloadBatchTemplate() {
   const originNames = state.origins.map((origin) => origin.supplierShortName || origin.name).filter(Boolean);
   if (!originNames.length) {
     toast("发货地选项为空，请先在维度表库上传并应用发货地址。");
+    return;
   }
   const templateRows = [
     ["订单号", "原始单号", "店铺", "仓库", "客服备注", "顾客地址", "货品简称", "是否上楼", "楼梯类型", "购买件数", "发货地"],
     ["", "", "", "", "", "", "示例货品A", "无需上楼", "", 1, ""],
     ["", "", "", "", "", "", "示例货品B", "需上楼", "电梯", 2, ""]
   ];
-  const workbookBytes = createBatchTemplateWorkbook(templateRows, originNames);
-  downloadBinaryFile("物流地址查询导入模板.xlsx", workbookBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  const originRows = originNames.map((name) => [name]);
+  const wb = XLSX.utils.book_new();
+  const ws1 = XLSX.utils.aoa_to_sheet(templateRows);
+  ws1["!cols"] = [
+    { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 14 },
+    { wch: 30 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 22 }
+  ];
+  XLSX.utils.book_append_sheet(wb, ws1, "地址查询导入模板");
+  const ws2 = XLSX.utils.aoa_to_sheet(originRows);
+  XLSX.utils.book_append_sheet(wb, ws2, "发货地选项");
+  const bytes = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+  downloadBinaryFile("物流地址查询导入模板.xlsx", bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 }
 
-function createBatchTemplateWorkbook(rows, originNames) {
-  const optionNames = originNames.length ? originNames : [""];
-  const files = {
-    "[Content_Types].xml": buildContentTypesXml(),
-    "_rels/.rels": buildRootRelsXml(),
-    "xl/workbook.xml": buildWorkbookXml(),
-    "xl/_rels/workbook.xml.rels": buildWorkbookRelsXml(),
-    "xl/styles.xml": buildStylesXml(),
-    "xl/worksheets/sheet1.xml": buildTemplateSheetXml(rows, optionNames.length),
-    "xl/worksheets/sheet2.xml": buildOriginOptionsSheetXml(optionNames)
-  };
-  return createZip(files);
-}
-
-function buildContentTypesXml() {
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-  <Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
-</Types>`;
-}
-
-function buildSingleSheetContentTypesXml() {
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
-</Types>`;
-}
-
-function buildRootRelsXml() {
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
-</Relationships>`;
-}
-
-function buildWorkbookXml() {
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <sheets>
-    <sheet name="地址查询导入模板" sheetId="1" r:id="rId1"/>
-    <sheet name="发货地选项" sheetId="2" state="hidden" r:id="rId2"/>
-  </sheets>
-</workbook>`;
-}
-
-function buildSingleSheetWorkbookXml(sheetName) {
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <sheets>
-    <sheet name="${xmlEscape(sheetName)}" sheetId="1" r:id="rId1"/>
-  </sheets>
-</workbook>`;
-}
-
-function buildWorkbookRelsXml() {
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
-  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-</Relationships>`;
-}
-
-function buildSingleSheetWorkbookRelsXml() {
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-</Relationships>`;
-}
-
-function buildStylesXml() {
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <fonts count="2"><font><sz val="11"/><name val="Microsoft YaHei"/></font><font><b/><sz val="11"/><name val="Microsoft YaHei"/></font></fonts>
-  <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
-  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
-  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>
-  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
-</styleSheet>`;
-}
-
-function buildExportStylesXml() {
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <fonts count="2">
-    <font><sz val="11"/><name val="Microsoft YaHei"/></font>
-    <font><b/><sz val="11"/><name val="Microsoft YaHei"/></font>
-  </fonts>
-  <fills count="3">
-    <fill><patternFill patternType="none"/></fill>
-    <fill><patternFill patternType="gray125"/></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFD9EAF7"/><bgColor indexed="64"/></patternFill></fill>
-  </fills>
-  <borders count="2">
-    <border><left/><right/><top/><bottom/><diagonal/></border>
-    <border>
-      <left style="thin"><color rgb="FFB8C7D9"/></left>
-      <right style="thin"><color rgb="FFB8C7D9"/></right>
-      <top style="thin"><color rgb="FFB8C7D9"/></top>
-      <bottom style="thin"><color rgb="FFB8C7D9"/></bottom>
-      <diagonal/>
-    </border>
-  </borders>
-  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="3">
-    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
-    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-  </cellXfs>
-  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
-</styleSheet>`;
-}
-
-function buildTemplateSheetXml(rows, optionCount) {
-  const sheetRows = rows.map((row, rowIndex) => {
-    const cells = row.map((value, colIndex) => buildCellXml(rowIndex + 1, colIndex + 1, value, rowIndex === 0 ? 1 : 0)).join("");
-    return `<row r="${rowIndex + 1}">${cells}</row>`;
-  }).join("");
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <dimension ref="A1:K501"/>
-  <sheetViews><sheetView workbookViewId="0"/></sheetViews>
-  <sheetFormatPr defaultRowHeight="18"/>
-  <cols><col min="1" max="1" width="9" customWidth="1"/><col min="6" max="6" width="9" customWidth="1"/><col min="7" max="7" width="18" customWidth="1"/><col min="8" max="8" width="14" customWidth="1"/><col min="10" max="10" width="12" customWidth="1"/><col min="11" max="11" width="22" customWidth="1"/></cols>
-  <sheetData>${sheetRows}</sheetData>
-  <dataValidations count="3">
-    <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="H2:H501">
-      <formula1>"需上楼,无需上楼"</formula1>
-    </dataValidation>
-    <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="I2:I501">
-      <formula1>"电梯,步行梯"</formula1>
-    </dataValidation>
-    <dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="K2:K501">
-      <formula1>发货地选项!$A$1:$A$${optionCount}</formula1>
-    </dataValidation>
-  </dataValidations>
-</worksheet>`;
-}
-
-function createExportResultWorkbook(rows) {
-  const files = {
-    "[Content_Types].xml": buildSingleSheetContentTypesXml(),
-    "_rels/.rels": buildRootRelsXml(),
-    "xl/workbook.xml": buildSingleSheetWorkbookXml("物流查询结果"),
-    "xl/_rels/workbook.xml.rels": buildSingleSheetWorkbookRelsXml(),
-    "xl/styles.xml": buildExportStylesXml(),
-    "xl/worksheets/sheet1.xml": buildExportResultSheetXml(rows)
-  };
-  return createZip(files);
-}
-
-function buildExportResultSheetXml(rows) {
-  const safeRows = rows?.length ? rows : [["暂无查询结果"]];
-  const rowCount = safeRows.length;
-  const colCount = Math.max(...safeRows.map((row) => row.length));
-  const lastRef = `${columnName(colCount)}${rowCount}`;
-  const cols = computeExportColumnWidths(safeRows)
-    .map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`)
-    .join("");
-  const sheetRows = safeRows.map((row, rowIndex) => {
-    const cells = [];
-    for (let colIndex = 0; colIndex < colCount; colIndex += 1) {
-      cells.push(buildExportCellXml(rowIndex + 1, colIndex + 1, row[colIndex] ?? "", rowIndex === 0 ? 1 : 2));
-    }
-    return `<row r="${rowIndex + 1}">${cells.join("")}</row>`;
-  }).join("");
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <dimension ref="A1:${lastRef}"/>
-  <sheetViews><sheetView workbookViewId="0"/></sheetViews>
-  <sheetFormatPr defaultRowHeight="18"/>
-  <cols>${cols}</cols>
-  <sheetData>${sheetRows}</sheetData>
-</worksheet>`;
-}
-
-function computeExportColumnWidths(rows) {
-  const colCount = Math.max(...rows.map((row) => row.length));
-  const widths = [];
-  for (let colIndex = 0; colIndex < colCount; colIndex += 1) {
-    const maxLen = rows.reduce((max, row) => Math.max(max, displayTextWidth(row[colIndex])), 0);
-    widths.push(Math.max(8, Math.min(48, maxLen + 2)));
-  }
-  return widths;
-}
-
-function displayTextWidth(value) {
-  return String(value ?? "")
-    .split("")
-    .reduce((sum, char) => sum + (/[\u4e00-\u9fa5]/.test(char) ? 2 : 1), 0);
-}
-
-function buildExportCellXml(rowIndex, colIndex, value, styleIndex) {
-  const ref = `${columnName(colIndex)}${rowIndex}`;
-  const style = ` s="${styleIndex}"`;
-  const numberValue = typeof value === "number" && Number.isFinite(value);
-  if (numberValue) return `<c r="${ref}"${style}><v>${value}</v></c>`;
-  return `<c r="${ref}" t="inlineStr"${style}><is><t>${xmlEscape(value)}</t></is></c>`;
-}
-
-function buildOriginOptionsSheetXml(originNames) {
-  const rows = originNames.map((name, index) => `<row r="${index + 1}">${buildCellXml(index + 1, 1, name)}</row>`).join("");
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <dimension ref="A1:A${originNames.length}"/>
-  <sheetViews><sheetView workbookViewId="0"/></sheetViews>
-  <sheetFormatPr defaultRowHeight="18"/>
-  <sheetData>${rows}</sheetData>
-</worksheet>`;
-}
-
-function buildCellXml(rowIndex, colIndex, value, styleIndex = 0) {
-  const ref = `${columnName(colIndex)}${rowIndex}`;
-  const style = styleIndex ? ` s="${styleIndex}"` : "";
-  if (typeof value === "number") return `<c r="${ref}"${style}><v>${value}</v></c>`;
-  return `<c r="${ref}" t="inlineStr"${style}><is><t>${xmlEscape(value)}</t></is></c>`;
-}
-
-function columnName(index) {
-  let name = "";
-  while (index > 0) {
-    const mod = (index - 1) % 26;
-    name = String.fromCharCode(65 + mod) + name;
-    index = Math.floor((index - 1) / 26);
-  }
-  return name;
-}
-
-function createZip(files) {
-  const encoder = new TextEncoder();
-  const localParts = [];
-  const centralParts = [];
-  let offset = 0;
-  for (const [name, content] of Object.entries(files)) {
-    const nameBytes = encoder.encode(name);
-    const data = encoder.encode(content.replace(/\r?\n/g, ""));
-    const crc = crc32(data);
-    const localHeader = new Uint8Array(30 + nameBytes.length);
-    const localView = new DataView(localHeader.buffer);
-    localView.setUint32(0, 0x04034b50, true);
-    localView.setUint16(4, 20, true);
-    localView.setUint16(6, 0, true);
-    localView.setUint16(8, 0, true);
-    localView.setUint16(10, 0, true);
-    localView.setUint16(12, 0, true);
-    localView.setUint32(14, crc, true);
-    localView.setUint32(18, data.length, true);
-    localView.setUint32(22, data.length, true);
-    localView.setUint16(26, nameBytes.length, true);
-    localView.setUint16(28, 0, true);
-    localHeader.set(nameBytes, 30);
-    localParts.push(localHeader, data);
-
-    const centralHeader = new Uint8Array(46 + nameBytes.length);
-    const centralView = new DataView(centralHeader.buffer);
-    centralView.setUint32(0, 0x02014b50, true);
-    centralView.setUint16(4, 20, true);
-    centralView.setUint16(6, 20, true);
-    centralView.setUint16(8, 0, true);
-    centralView.setUint16(10, 0, true);
-    centralView.setUint16(12, 0, true);
-    centralView.setUint16(14, 0, true);
-    centralView.setUint32(16, crc, true);
-    centralView.setUint32(20, data.length, true);
-    centralView.setUint32(24, data.length, true);
-    centralView.setUint16(28, nameBytes.length, true);
-    centralView.setUint16(30, 0, true);
-    centralView.setUint16(32, 0, true);
-    centralView.setUint16(34, 0, true);
-    centralView.setUint16(36, 0, true);
-    centralView.setUint32(38, 0, true);
-    centralView.setUint32(42, offset, true);
-    centralHeader.set(nameBytes, 46);
-    centralParts.push(centralHeader);
-    offset += localHeader.length + data.length;
-  }
-  const centralOffset = offset;
-  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
-  const end = new Uint8Array(22);
-  const endView = new DataView(end.buffer);
-  endView.setUint32(0, 0x06054b50, true);
-  endView.setUint16(8, centralParts.length, true);
-  endView.setUint16(10, centralParts.length, true);
-  endView.setUint32(12, centralSize, true);
-  endView.setUint32(16, centralOffset, true);
-  return concatUint8Arrays([...localParts, ...centralParts, end]);
-}
-
-function crc32(bytes) {
-  const table = crc32.table || (crc32.table = buildCrc32Table());
-  let crc = -1;
-  for (const byte of bytes) crc = (crc >>> 8) ^ table[(crc ^ byte) & 0xff];
-  return (crc ^ -1) >>> 0;
-}
-
-function buildCrc32Table() {
-  const table = new Uint32Array(256);
-  for (let i = 0; i < 256; i += 1) {
-    let c = i;
-    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    table[i] = c >>> 0;
-  }
-  return table;
-}
-
-function concatUint8Arrays(parts) {
-  const total = parts.reduce((sum, part) => sum + part.length, 0);
-  const output = new Uint8Array(total);
-  let offset = 0;
-  for (const part of parts) {
-    output.set(part, offset);
-    offset += part.length;
-  }
-  return output;
-}
 
 function downloadBinaryFile(fileName, bytes, mimeType) {
   const blob = new Blob([bytes], { type: mimeType });
@@ -2478,15 +2163,6 @@ function downloadBinaryFile(fileName, bytes, mimeType) {
   URL.revokeObjectURL(url);
 }
 
-function xmlEscape(value) {
-  return String(value ?? "").replace(/[<>&'"]/g, (char) => ({
-    "<": "&lt;",
-    ">": "&gt;",
-    "&": "&amp;",
-    "'": "&apos;",
-    '"': "&quot;"
-  }[char]));
-}
 
 function exportResults() {
   const resultColumns = getResultExportColumns();
@@ -2494,8 +2170,11 @@ function exportResults() {
   const rows = hasBatchSource
     ? buildBatchResultRows(resultColumns)
     : buildSingleResultRows(resultColumns);
-  const workbookBytes = createExportResultWorkbook(rows);
-  downloadBinaryFile(`物流查询结果_${formatDateForFileName(new Date())}.xlsx`, workbookBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, "物流查询结果");
+  const bytes = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+  downloadBinaryFile(`物流查询结果_${formatDateForFileName(new Date())}.xlsx`, bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 }
 
 function getResultExportColumns() {
