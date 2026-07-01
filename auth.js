@@ -15,7 +15,7 @@
     { key: "dimensionLibrary", label: "维度表库", href: "dimension-library.html" },
     { key: "permissionManagement", label: "权限管理", href: "permission-management.html" }
   ];
-  const AUTH_SCRIPT_VERSION = "20260701";
+  const AUTH_SCRIPT_VERSION = "20260704";
   let localUsersSyncedToServer = false;
 
   function createId() {
@@ -418,17 +418,14 @@
   }
 
   function renderAuthScreen({ pageKey, mode = "login", message = "" }) {
+    mode = "login";
     document.body.className = "auth-page";
     document.body.innerHTML = `
       <main class="auth-shell">
         <form class="auth-panel" data-auth-form autocomplete="off">
           <div>
             <h1>物流查询系统</h1>
-            <p>登录后进入系统；新用户可先注册，注册后需管理员孙立柱授权页面权限。</p>
-          </div>
-          <div class="auth-tabs">
-            <button type="button" class="${mode === "login" ? "active" : ""}" data-auth-mode="login">登录</button>
-            <button type="button" class="${mode === "register" ? "active" : ""}" data-auth-mode="register">新用户注册</button>
+            <p>登录后进入系统；账号由管理员孙立柱统一维护并授权页面权限。</p>
           </div>
           <label class="field">
             <span>姓名</span>
@@ -436,18 +433,15 @@
           </label>
           <label class="field">
             <span>密码</span>
-            <input name="authPassword" type="password" autocomplete="${mode === "login" ? "current-password" : "new-password"}" required>
+            <input name="authPassword" type="password" autocomplete="current-password" required>
           </label>
           <p class="auth-message" data-auth-message>${escapeHtml(message)}</p>
-          <button class="button primary" type="submit">${mode === "login" ? "登录" : "提交注册"}</button>
+          <button class="button primary" type="submit">登录</button>
         </form>
       </main>
     `;
     const form = document.querySelector("[data-auth-form]");
     const messageNode = document.querySelector("[data-auth-message]");
-    document.querySelectorAll("[data-auth-mode]").forEach((button) => {
-      button.addEventListener("click", () => renderAuthScreen({ pageKey, mode: button.dataset.authMode }));
-    });
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const submitButton = form.querySelector("button[type='submit']");
@@ -455,17 +449,7 @@
       const name = formData.get("authName");
       const password = formData.get("authPassword");
       submitButton.disabled = true;
-      messageNode.textContent = mode === "login" ? "正在登录..." : "正在提交注册...";
-      if (mode === "register") {
-        const result = await registerAsync(name, password);
-        submitButton.disabled = false;
-        if (!result.ok) {
-          messageNode.textContent = result.message;
-          return;
-        }
-        renderAuthScreen({ pageKey, mode: "login", message: result.message });
-        return;
-      }
+      messageNode.textContent = "正在登录...";
       const result = await loginAsync(name, password);
       submitButton.disabled = false;
       if (!result.ok) {
