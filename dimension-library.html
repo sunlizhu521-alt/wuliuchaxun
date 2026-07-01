@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>维度表文件库 - 物流查询系统</title>
-  <link rel="stylesheet" href="styles.css?v=20260687">
+  <link rel="stylesheet" href="styles.css?v=20260703">
 </head>
 <body class="file-library-page" data-library-type="dimension">
   <div class="app-shell">
@@ -28,6 +28,7 @@
         </div>
         <div class="topbar-actions">
           <button id="applyAllBtn" class="secondary" type="button">一键全部应用刷新</button>
+          <button id="uploadCloudBtn" class="primary" type="button">上传到腾讯云</button>
           <button id="clearCacheBtn" class="danger" type="button">清除缓存</button>
         </div>
       </header>
@@ -60,6 +61,7 @@
         </div>
         <div class="toolbar">
           <button id="refreshBtn" type="button">应用刷新</button>
+          <button id="uploadCloudToolbarBtn" class="primary" type="button">上传到腾讯云</button>
           <button id="downloadSharedBtn" class="secondary" type="button">导出共享数据包</button>
           <button id="importSharedBtn" class="secondary" type="button">导入共享数据包</button>
           <input id="importSharedInput" class="hidden-file-input" type="file" accept=".json">
@@ -74,6 +76,6 @@
   <script src="vendor/xlsx.full.min.js?v=20260641" defer></script>
   <script src="auth.js?v=20260701" defer></script>
   <script src="shared-library.js?v=20260702" defer></script>
-  <script src="dimension-library.js?v=20260702" defer></script>
+  <script src="dimension-library.js?v=20260703" defer></script>
 </body>
 </html>

@@ -83,7 +83,7 @@ class Utf8StaticHandler(SimpleHTTPRequestHandler):
     def do_POST(self):
         path = self.clean_request_path()
         if path == "/api/dimension-library/shared":
-            if not self.require_admin():
+            if not self.require_dimension_uploader():
                 return
             payload = self.normalize_shared_library_payload(self.read_json_body())
             self.save_shared_library(payload)
@@ -357,6 +357,13 @@ class Utf8StaticHandler(SimpleHTTPRequestHandler):
         user = self.current_user()
         if not self.is_admin(user):
             self.send_json({"error": "无权限"}, 403)
+            return None
+        return user
+
+    def require_dimension_uploader(self):
+        user = self.current_user()
+        if not user or user.get("name") != DEFAULT_ADMIN_USER["name"]:
+            self.send_json({"error": "只有孙立柱可以上传维度表到腾讯云"}, 403)
             return None
         return user
 

@@ -67,6 +67,8 @@ const slots = [
 const slotIds = new Set(slots.map((slot) => slot.id));
 const grid = document.getElementById("libraryGrid");
 const applyAllBtn = document.getElementById("applyAllBtn");
+const uploadCloudBtn = document.getElementById("uploadCloudBtn");
+const uploadCloudToolbarBtn = document.getElementById("uploadCloudToolbarBtn");
 const clearCacheBtn = document.getElementById("clearCacheBtn");
 const refreshBtn = document.getElementById("refreshBtn");
 const downloadSharedBtn = document.getElementById("downloadSharedBtn");
@@ -90,8 +92,9 @@ async function init() {
     await window.LogisticsSharedLibrary?.importSharedLibrary?.();
     records = await loadRecords();
     bindToolbar();
+    updateCloudUploadControls();
     renderLibrary();
-    sharedStatus.textContent = "文件库使用浏览器本地存储；管理员应用刷新后会同步到腾讯云，其他用户登录后自动读取。";
+    sharedStatus.textContent = "文件库使用浏览器本地存储；孙立柱可点击“上传到腾讯云”，异地同事登录后自动读取。";
   } catch (error) {
     console.error(error);
     sharedStatus.textContent = "共享文件库同步失败，请直接上传本地文件。";
@@ -102,6 +105,8 @@ async function init() {
 function bindToolbar() {
   applyAllBtn?.addEventListener("click", applyAllSlots);
   refreshBtn?.addEventListener("click", applyAllSlots);
+  uploadCloudBtn?.addEventListener("click", uploadCloudLibrary);
+  uploadCloudToolbarBtn?.addEventListener("click", uploadCloudLibrary);
   clearCacheBtn?.addEventListener("click", clearAllLibraryCache);
   downloadSharedBtn?.addEventListener("click", exportSharedPackage);
   importSharedBtn?.addEventListener("click", () => importSharedInput?.click());
@@ -337,8 +342,7 @@ async function applySlot(slotId) {
   records.set(slotId, applied);
   await saveRecord(applied);
   renderLibrary();
-  const synced = await syncAppliedRecordsToServer();
-  toast(synced ? "应用刷新完成，已同步腾讯云。" : "应用刷新完成，本地已生效；云端同步失败。");
+  toast("应用刷新完成，本地已生效。需要异地同事读取时，请点击“上传到腾讯云”。");
 }
 
 async function applyAllSlots() {
@@ -358,8 +362,52 @@ async function applyAllSlots() {
     await saveRecord(applied);
   }
   renderLibrary();
+  toast(`已应用 ${targets.length} 个槽位，本地已生效。需要异地同事读取时，请点击“上传到腾讯云”。`);
+}
+
+async function uploadCloudLibrary() {
+  if (!canUploadCloudLibrary()) {
+    toast("只有孙立柱可以上传维度表到腾讯云。");
+    return;
+  }
+  const targets = slots
+    .map((slot) => records.get(slot.id))
+    .filter((record) => hasFile(record));
+  if (!targets.length) {
+    toast("当前没有可上传的本地维度表文件。");
+    return;
+  }
+  for (const record of targets) {
+    const applied = normalizeRecord({
+      ...record,
+      fileName: record.pendingName || record.fileName,
+      pendingFile: false,
+      applied: true,
+      appliedAt: new Date().toISOString()
+    });
+    delete applied.pendingName;
+    records.set(record.slotId, applied);
+    await saveRecord(applied);
+  }
+  renderLibrary();
   const synced = await syncAppliedRecordsToServer();
-  toast(synced ? `已应用 ${targets.length} 个槽位，并同步腾讯云。` : `已应用 ${targets.length} 个槽位，本地已生效；云端同步失败。`);
+  toast(synced ? `已上传 ${targets.length} 个维度槽位到腾讯云。` : "上传腾讯云失败，请检查账号权限或网络。");
+}
+
+function canUploadCloudLibrary() {
+  const user = window.LogisticsAuth?.getCurrentUser?.();
+  const adminName = window.LogisticsAuth?.DEFAULT_ADMIN?.name || "孙立柱";
+  return Boolean(user && (user.name === adminName || user.id === "u-admin"));
+}
+
+function updateCloudUploadControls() {
+  const canUpload = canUploadCloudLibrary();
+  [uploadCloudBtn, uploadCloudToolbarBtn].forEach((button) => {
+    if (!button) return;
+    button.hidden = !canUpload;
+    button.disabled = !canUpload;
+    button.title = canUpload ? "上传当前本地维度表到腾讯云共享库" : "只有孙立柱可以上传维度表到腾讯云";
+  });
 }
 
 async function clearSlot(slotId) {

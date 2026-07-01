@@ -1245,6 +1245,17 @@ body.file-library-page {
   background: #f8fbff;
 }
 
+.file-library-page button.primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.file-library-page button.primary:hover:not(:disabled) {
+  border-color: var(--primary-dark);
+  background: var(--primary-dark);
+}
+
 .file-library-page button.danger {
   border-color: #ffd5d2;
   background: #fff5f4;
