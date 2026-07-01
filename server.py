@@ -1,8 +1,36 @@
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from collections import defaultdict
 import json
 import os
+import time
 from urllib.parse import unquote
 from uuid import uuid4
+
+
+# === Security configuration ===
+ALLOWED_ORIGIN = "https://zhugeaishiyanshi.com"
+SECURITY_HEADERS = [
+    ("X-Content-Type-Options", "nosniff"),
+    ("X-Frame-Options", "DENY"),
+    ("Referrer-Policy", "strict-origin-when-cross-origin"),
+    ("X-XSS-Protection", "0"),
+    ("Cache-Control", "no-store"),
+]
+
+# Simple in-memory rate limiter
+_rate_limit_store = defaultdict(list)
+RATE_LIMIT_WINDOW = 900   # 15 minutes
+RATE_LIMIT_MAX = 500      # max requests per window
+
+
+def check_rate_limit(client_ip):
+    now = time.time()
+    cutoff = now - RATE_LIMIT_WINDOW
+    _rate_limit_store[client_ip] = [t for t in _rate_limit_store[client_ip] if t > cutoff]
+    if len(_rate_limit_store[client_ip]) >= RATE_LIMIT_MAX:
+        return False
+    _rate_limit_store[client_ip].append(now)
+    return True
 
 
 ROLE_ADMIN = "管理员"
@@ -48,7 +76,11 @@ class Utf8StaticHandler(SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         if self.clean_request_path().startswith("/api/"):
             self.send_response(204)
-            self.send_header("Access-Control-Allow-Origin", "*")
+            origin = self.headers.get("Origin", "")
+            if origin == ALLOWED_ORIGIN:
+                self.send_header("Access-Control-Allow-Origin", origin)
+            else:
+                self.send_header("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
             self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Auth-User-Id, X-Auth-User-Name")
             self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
             self.end_headers()
@@ -57,6 +89,9 @@ class Utf8StaticHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         path = self.clean_request_path()
+        if path.startswith("/api/"):
+            if not self._api_guard():
+                return
         if path == "/api/dimension-library/shared":
             if not self.require_user():
                 return
@@ -82,6 +117,9 @@ class Utf8StaticHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = self.clean_request_path()
+        if path.startswith("/api/"):
+            if not self._api_guard():
+                return
         if path == "/api/dimension-library/shared":
             if not self.require_dimension_uploader():
                 return
@@ -170,6 +208,9 @@ class Utf8StaticHandler(SimpleHTTPRequestHandler):
 
     def do_PATCH(self):
         path = self.clean_request_path()
+        if path.startswith("/api/"):
+            if not self._api_guard():
+                return
         if path.startswith("/api/auth/users/") and path.endswith("/access"):
             if not self.require_admin():
                 return
@@ -188,6 +229,9 @@ class Utf8StaticHandler(SimpleHTTPRequestHandler):
 
     def do_DELETE(self):
         path = self.clean_request_path()
+        if path.startswith("/api/"):
+            if not self._api_guard():
+                return
         if path.startswith("/api/auth/users/"):
             if not self.require_admin():
                 return
@@ -204,6 +248,13 @@ class Utf8StaticHandler(SimpleHTTPRequestHandler):
 
     def clean_request_path(self):
         return self.path.split("?", 1)[0].split("#", 1)[0].rstrip("/") or "/"
+
+    def _api_guard(self):
+        client_ip = self.client_address[0]
+        if not check_rate_limit(client_ip):
+            self.send_json({"error": "请求过于频繁，请15分钟后再试"}, 429)
+            return False
+        return True
 
     def auth_data_path(self):
         return os.path.join(os.environ.get("APP_DIR", os.getcwd()), "data", "auth-users.json")
@@ -380,9 +431,10 @@ class Utf8StaticHandler(SimpleHTTPRequestHandler):
     def send_json(self, payload, status=200):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
+        for header_name, header_value in SECURITY_HEADERS:
+            self.send_header(header_name, header_value)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
 
