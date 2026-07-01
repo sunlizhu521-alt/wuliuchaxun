@@ -41,7 +41,7 @@ jobs:
           SOURCE: "./"
           TARGET: "/home/ubuntu/zhuge-ai-lab/wuliuchaxun/"
           ARGS: "-rlgoDzvc -i --delete"
-          EXCLUDE: "/.git/, /.github/, /data/auth-users.json, /data/auth-users.json.tmp"
+          EXCLUDE: "/.git/, /.github/, /data/auth-users.json, /data/auth-users.json.tmp, /data/runtime-shared-library.json, /data/runtime-shared-library.json.tmp"
 
       - name: Restart static server
         uses: appleboy/ssh-action@v1.0.3

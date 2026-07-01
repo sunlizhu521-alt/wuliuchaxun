@@ -2,7 +2,7 @@ const DB_NAME = "logistics-query-dimension-library";
 const DB_VERSION = 1;
 const STORE_NAME = "dimension-files";
 const SHARED_PACKAGE_NAME = "物流查询维度表共享数据包.json";
-const SHARED_MANIFEST_PATH = "data/shared-library.json";
+const SHARED_MANIFEST_PATH = "/api/dimension-library/shared";
 const LIBRARY_CACHE_SLOT_ID = "__normalized-library-cache__";
 
 const slots = [
@@ -91,7 +91,7 @@ async function init() {
     records = await loadRecords();
     bindToolbar();
     renderLibrary();
-    sharedStatus.textContent = "文件库使用浏览器本地存储；GitHub Pages 默认不提交真实业务 Excel。";
+    sharedStatus.textContent = "文件库使用浏览器本地存储；管理员应用刷新后会同步到腾讯云，其他用户登录后自动读取。";
   } catch (error) {
     console.error(error);
     sharedStatus.textContent = "共享文件库同步失败，请直接上传本地文件。";
@@ -337,7 +337,8 @@ async function applySlot(slotId) {
   records.set(slotId, applied);
   await saveRecord(applied);
   renderLibrary();
-  toast("应用刷新完成。");
+  const synced = await syncAppliedRecordsToServer();
+  toast(synced ? "应用刷新完成，已同步腾讯云。" : "应用刷新完成，本地已生效；云端同步失败。");
 }
 
 async function applyAllSlots() {
@@ -357,7 +358,8 @@ async function applyAllSlots() {
     await saveRecord(applied);
   }
   renderLibrary();
-  toast(`已应用 ${targets.length} 个槽位。`);
+  const synced = await syncAppliedRecordsToServer();
+  toast(synced ? `已应用 ${targets.length} 个槽位，并同步腾讯云。` : `已应用 ${targets.length} 个槽位，本地已生效；云端同步失败。`);
 }
 
 async function clearSlot(slotId) {
@@ -382,6 +384,13 @@ async function clearAllLibraryCache() {
 }
 
 function exportSharedPackage() {
+  const payload = buildSharedPayload();
+  const exported = payload.records;
+  downloadJsonFile(SHARED_PACKAGE_NAME, payload);
+  toast(`已导出 ${Object.keys(exported).length} 个已应用槽位。`);
+}
+
+function buildSharedPayload() {
   const exported = {};
   for (const slot of slots) {
     const record = records.get(slot.id);
@@ -394,7 +403,7 @@ function exportSharedPackage() {
       });
     }
   }
-  const payload = {
+  return {
     project: "wuliuchaxun",
     libraryType: "dimension",
     updatedAt: new Date().toISOString(),
@@ -402,8 +411,23 @@ function exportSharedPackage() {
     storeName: STORE_NAME,
     records: exported
   };
-  downloadJsonFile(SHARED_PACKAGE_NAME, payload);
-  toast(`已导出 ${Object.keys(exported).length} 个已应用槽位。`);
+}
+
+async function syncAppliedRecordsToServer() {
+  const uploader = window.LogisticsSharedLibrary?.uploadSharedLibrary;
+  if (!uploader) return false;
+  const payload = buildSharedPayload();
+  try {
+    sharedStatus.textContent = "正在同步维度文件到腾讯云...";
+    await uploader(payload);
+    sharedStatus.textContent = `已同步到腾讯云：${Object.keys(payload.records).length} 个已应用槽位。`;
+    return true;
+  } catch (error) {
+    console.warn("Tencent shared library sync failed:", error);
+    sharedStatus.textContent = "同步腾讯云失败，请确认当前账号是管理员并重试。";
+    toast(error.message || "同步腾讯云共享维度库失败");
+    return false;
+  }
 }
 
 async function importSharedPackage(file) {

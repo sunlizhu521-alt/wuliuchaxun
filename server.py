@@ -8,6 +8,7 @@ from uuid import uuid4
 ROLE_ADMIN = "管理员"
 ROLE_USER = "普通用户"
 PAGE_KEYS = ["query", "dimensionLibrary", "permissionManagement"]
+SHARED_LIBRARY_FILE = "runtime-shared-library.json"
 DEFAULT_ADMIN_USER = {
     "id": "u-admin",
     "name": "孙立柱",
@@ -56,6 +57,11 @@ class Utf8StaticHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         path = self.clean_request_path()
+        if path == "/api/dimension-library/shared":
+            if not self.require_user():
+                return
+            self.send_json({"library": self.load_shared_library()})
+            return
         if path == "/api/auth/me":
             user = self.current_user()
             if not user:
@@ -76,6 +82,13 @@ class Utf8StaticHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = self.clean_request_path()
+        if path == "/api/dimension-library/shared":
+            if not self.require_admin():
+                return
+            payload = self.normalize_shared_library_payload(self.read_json_body())
+            self.save_shared_library(payload)
+            self.send_json({"ok": True, "library": payload})
+            return
         if path == "/api/auth/login":
             payload = self.read_json_body()
             name = str(payload.get("name") or "").strip()
@@ -195,6 +208,69 @@ class Utf8StaticHandler(SimpleHTTPRequestHandler):
     def auth_data_path(self):
         return os.path.join(os.environ.get("APP_DIR", os.getcwd()), "data", "auth-users.json")
 
+    def shared_library_path(self):
+        return os.path.join(os.environ.get("APP_DIR", os.getcwd()), "data", SHARED_LIBRARY_FILE)
+
+    def static_shared_library_path(self):
+        return os.path.join(os.environ.get("APP_DIR", os.getcwd()), "data", "shared-library.json")
+
+    def default_shared_library_payload(self):
+        return {
+            "version": 1,
+            "project": "wuliuchaxun",
+            "libraryType": "dimension",
+            "updatedAt": "",
+            "records": {},
+        }
+
+    def load_shared_library(self):
+        for path in [self.shared_library_path(), self.static_shared_library_path()]:
+            if not os.path.exists(path):
+                continue
+            try:
+                with open(path, "r", encoding="utf-8") as handle:
+                    payload = json.load(handle)
+                return self.normalize_shared_library_payload(payload)
+            except Exception as error:
+                print(f"Failed to read shared library {path}: {error}", flush=True)
+        return self.default_shared_library_payload()
+
+    def save_shared_library(self, payload):
+        path = self.shared_library_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp_path = f"{path}.tmp"
+        with open(tmp_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, path)
+
+    def normalize_shared_library_payload(self, payload):
+        if not isinstance(payload, dict):
+            payload = {}
+        records = payload.get("records") if isinstance(payload.get("records"), (dict, list)) else {}
+        if isinstance(records, list):
+            normalized_records = {}
+            for record in records:
+                if not isinstance(record, dict):
+                    continue
+                slot_id = record.get("slotId") or record.get("id")
+                if slot_id:
+                    normalized_records[str(slot_id)] = record
+        else:
+            normalized_records = {
+                str(slot_id): record
+                for slot_id, record in records.items()
+                if slot_id and isinstance(record, dict)
+            }
+        return {
+            "version": payload.get("version") or 1,
+            "project": payload.get("project") or "wuliuchaxun",
+            "libraryType": payload.get("libraryType") or "dimension",
+            "updatedAt": payload.get("updatedAt") or "",
+            "dbName": payload.get("dbName") or "logistics-query-dimension-library",
+            "storeName": payload.get("storeName") or "dimension-files",
+            "records": normalized_records,
+        }
+
     def load_users(self):
         path = self.auth_data_path()
         users = []
@@ -266,6 +342,13 @@ class Utf8StaticHandler(SimpleHTTPRequestHandler):
         if not user_id and not user_name:
             return None
         return next((user for user in self.load_users() if user.get("id") == user_id or user.get("name") == user_name), None)
+
+    def require_user(self):
+        user = self.current_user()
+        if not user:
+            self.send_json({"error": "Not logged in"}, 401)
+            return None
+        return user
 
     def is_admin(self, user):
         return bool(user and (user.get("name") == DEFAULT_ADMIN_USER["name"] or user.get("role") == ROLE_ADMIN))

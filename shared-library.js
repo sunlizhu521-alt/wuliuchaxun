@@ -2,7 +2,8 @@
   const DB_NAME = "logistics-query-dimension-library";
   const DB_VERSION = 1;
   const STORE_NAME = "dimension-files";
-  const SHARED_URL = "data/shared-library.json?v=20260688";
+  const SHARED_API_URL = "/api/dimension-library/shared";
+  const STATIC_SHARED_URL = "data/shared-library.json?v=20260702";
   const LIBRARY_CACHE_SLOT_ID = "__normalized-library-cache__";
   let importPromise = null;
   let importedOnce = false;
@@ -56,11 +57,8 @@
   async function doImportSharedLibrary() {
     if (!window.indexedDB) return false;
     try {
-      const response = await fetch(SHARED_URL, { cache: "no-store" });
-      if (!response.ok) return false;
-      const payload = await response.json();
-      const records = payload.records || {};
-      const entries = Object.entries(records);
+      const payload = await loadSharedPayload();
+      const entries = normalizeSharedEntries(payload.records);
       if (!entries.length) return false;
 
       const db = await openDB();
@@ -94,11 +92,72 @@
     }
   }
 
+  async function loadSharedPayload() {
+    const apiPayload = await fetchJson(SHARED_API_URL, { headers: authHeaders() }).catch((error) => {
+      console.warn("Tencent shared library fetch skipped:", error);
+      return null;
+    });
+    if (apiPayload) return unwrapSharedPayload(apiPayload);
+    const staticPayload = await fetchJson(STATIC_SHARED_URL).catch((error) => {
+      console.warn("Static shared library fetch skipped:", error);
+      return null;
+    });
+    return unwrapSharedPayload(staticPayload || {});
+  }
+
+  async function fetchJson(url, options = {}) {
+    const response = await fetch(url, {
+      cache: "no-store",
+      ...options,
+      headers: options.headers || {}
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Request failed: ${response.status}`);
+    return payload;
+  }
+
+  function unwrapSharedPayload(payload) {
+    return payload?.library || payload || {};
+  }
+
+  function normalizeSharedEntries(recordsPayload) {
+    if (Array.isArray(recordsPayload)) {
+      return recordsPayload
+        .map((record) => [record?.slotId || record?.id, record])
+        .filter(([slotId, record]) => Boolean(slotId && record));
+    }
+    return Object.entries(recordsPayload || {}).map(([key, record]) => [record?.slotId || record?.id || key, record]);
+  }
+
+  function authHeaders() {
+    const current = window.LogisticsAuth?.getCurrentUser?.();
+    return {
+      ...(current?.id ? { "X-Auth-User-Id": current.id } : {}),
+      ...(current?.name ? { "X-Auth-User-Name": encodeURIComponent(current.name) } : {})
+    };
+  }
+
+  async function uploadSharedLibrary(payload) {
+    const response = await fetch(SHARED_API_URL, {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify(payload || {})
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "同步腾讯云共享维度库失败");
+    return result;
+  }
+
   window.LogisticsSharedLibrary = {
     dbName: DB_NAME,
     dbVersion: DB_VERSION,
     storeName: STORE_NAME,
-    importSharedLibrary
+    importSharedLibrary,
+    uploadSharedLibrary
   };
 
   importSharedLibrary();

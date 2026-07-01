@@ -416,7 +416,7 @@ function finishLibraryLoad(source) {
 function syncSharedLibraryInBackground(currentSignature) {
   const importer = window.LogisticsSharedLibrary?.importSharedLibrary;
   if (!importer) return;
-  importer().then(async (changed) => {
+  importer({ force: true }).then(async (changed) => {
     if (!changed || state.libraryLoading) return;
     const records = await loadAppliedRecords();
     const nextSignature = buildLibrarySignature(records);
