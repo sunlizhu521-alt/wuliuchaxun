@@ -22,8 +22,8 @@ function bindEvents() {
   els.permissionUserBody?.addEventListener("click", handleTableAction);
 }
 
-function renderUsers() {
-  const users = auth.getUsers();
+async function renderUsers() {
+  const users = await auth.getUsersAsync();
   els.permissionSummary.textContent = `注册用户 ${users.length} 个`;
   els.permissionUserBody.innerHTML = users.map(renderUserRow).join("");
 }
@@ -75,13 +75,13 @@ function handlePermissionChange(event) {
   row.classList.add("is-dirty");
 }
 
-function handleTableAction(event) {
+async function handleTableAction(event) {
   const button = event.target.closest("button[data-action]");
   if (!button) return;
   const row = button.closest("tr[data-user-id]");
   const userId = row?.dataset.userId;
   if (!userId) return;
-  const users = auth.getUsers();
+  const users = await auth.getUsersAsync();
   const user = users.find((item) => item.id === userId);
   if (!user) {
     toast("用户不存在，请刷新后重试");
@@ -93,9 +93,9 @@ function handleTableAction(event) {
   if (action === "delete") deleteUser(user);
 }
 
-function saveUserAccess(row, user) {
+async function saveUserAccess(row, user) {
   const selected = Array.from(row.querySelectorAll("input[type='checkbox']:checked")).map((input) => input.value);
-  if (auth.updateUserAccess(user.id, selected)) {
+  if (await auth.updateUserAccessAsync(user.id, selected)) {
     toast("已保存授权");
     renderUsers();
   } else {
@@ -103,10 +103,10 @@ function saveUserAccess(row, user) {
   }
 }
 
-function resetUserPassword(user) {
+async function resetUserPassword(user) {
   const password = window.prompt(`请输入 ${user.name} 的新密码（至少 4 位）`);
   if (password === null) return;
-  const result = auth.resetPassword(user.id, password);
+  const result = await auth.resetPasswordAsync(user.id, password);
   if (!result.ok) {
     toast(result.message || "重置失败");
     return;
@@ -114,9 +114,9 @@ function resetUserPassword(user) {
   toast("已重置密码");
 }
 
-function deleteUser(user) {
+async function deleteUser(user) {
   if (!window.confirm(`确认删除账号：${user.name}？`)) return;
-  if (auth.deleteUser(user.id)) {
+  if (await auth.deleteUserAsync(user.id)) {
     toast("已删除账号");
     renderUsers();
   } else {
@@ -124,8 +124,8 @@ function deleteUser(user) {
   }
 }
 
-function createUser() {
-  const result = auth.createUser(els.newUserName.value, els.newUserPassword.value);
+async function createUser() {
+  const result = await auth.createUserAsync(els.newUserName.value, els.newUserPassword.value);
   if (!result.ok) {
     toast(result.message || "创建失败");
     return;

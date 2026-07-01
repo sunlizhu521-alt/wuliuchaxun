@@ -15,6 +15,8 @@
     { key: "dimensionLibrary", label: "维度表库", href: "dimension-library.html" },
     { key: "permissionManagement", label: "权限管理", href: "permission-management.html" }
   ];
+  const AUTH_SCRIPT_VERSION = "20260701";
+  let localUsersSyncedToServer = false;
 
   function createId() {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -42,20 +44,20 @@
     localStorage.setItem(key, JSON.stringify(value));
   }
 
-  function normalizeUser(user) {
-    const isAdmin = user.name === DEFAULT_ADMIN.name || user.role === ROLE_ADMIN;
-    return {
-      id: user.id || createId(),
-      name: normalize(user.name),
-      password: String(user.password || ""),
-      role: isAdmin ? ROLE_ADMIN : ROLE_USER,
-      pageAccess: isAdmin ? PAGE_OPTIONS.map((page) => page.key) : normalizePageAccess(user.pageAccess)
-    };
-  }
-
   function normalizePageAccess(pageAccess) {
     const allowed = new Set(PAGE_OPTIONS.map((page) => page.key));
     return [...new Set((Array.isArray(pageAccess) ? pageAccess : []).filter((page) => allowed.has(page)))];
+  }
+
+  function normalizeUser(user) {
+    const isAdmin = user?.name === DEFAULT_ADMIN.name || user?.role === ROLE_ADMIN;
+    return {
+      id: user?.id || createId(),
+      name: normalize(user?.name),
+      password: String(user?.password || ""),
+      role: isAdmin ? ROLE_ADMIN : ROLE_USER,
+      pageAccess: isAdmin ? PAGE_OPTIONS.map((page) => page.key) : normalizePageAccess(user?.pageAccess)
+    };
   }
 
   function ensureUsers() {
@@ -84,6 +86,32 @@
     writeJson(USERS_KEY, Array.from(normalized.values()));
   }
 
+  function upsertLocalUser(serverUser) {
+    if (!serverUser?.name) return null;
+    const users = getUsers();
+    const index = users.findIndex((user) => user.id === serverUser.id || user.name === serverUser.name);
+    const existing = index >= 0 ? users[index] : {};
+    const merged = normalizeUser({
+      ...existing,
+      ...serverUser,
+      password: serverUser.password || existing.password || ""
+    });
+    if (index >= 0) users[index] = merged;
+    else users.push(merged);
+    saveUsers(users);
+    return merged;
+  }
+
+  function mergeVisibleUsers(users) {
+    const current = getUsers();
+    const byName = new Map(current.map((user) => [user.name, user]));
+    for (const user of users || []) {
+      const existing = byName.get(user.name) || {};
+      byName.set(user.name, normalizeUser({ ...existing, ...user, password: existing.password || user.password || "" }));
+    }
+    saveUsers(Array.from(byName.values()));
+  }
+
   function getCurrentUser() {
     const saved = readJson(CURRENT_USER_KEY, null);
     if (!saved?.id && !saved?.name) return null;
@@ -109,6 +137,31 @@
     return PAGE_OPTIONS.some((page) => canAccessPage(user, page.key));
   }
 
+  function authHeaders() {
+    const current = getCurrentUser();
+    return {
+      "Content-Type": "application/json",
+      ...(current?.id ? { "X-Auth-User-Id": current.id } : {}),
+      ...(current?.name ? { "X-Auth-User-Name": encodeURIComponent(current.name) } : {})
+    };
+  }
+
+  async function apiRequest(path, options = {}) {
+    const response = await fetch(path, {
+      ...options,
+      cache: "no-store",
+      headers: {
+        ...authHeaders(),
+        ...(options.headers || {})
+      }
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || "服务器权限接口请求失败");
+    }
+    return payload;
+  }
+
   function login(name, password) {
     const user = getUsers().find((item) => item.name === normalize(name));
     if (!user || user.password !== String(password || "")) {
@@ -116,6 +169,21 @@
     }
     setCurrentUser(user);
     return { ok: true, user };
+  }
+
+  async function loginAsync(name, password) {
+    try {
+      const payload = await apiRequest("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ name: normalize(name), password: String(password || "").trim() })
+      });
+      const user = upsertLocalUser(payload.user);
+      setCurrentUser(user);
+      return { ok: true, user, remote: true };
+    } catch (error) {
+      const fallback = login(name, password);
+      return fallback.ok ? fallback : { ok: false, message: error.message || fallback.message };
+    }
   }
 
   function register(name, password) {
@@ -136,8 +204,75 @@
     return { ok: true, message: "注册成功，请联系管理员授权后登录" };
   }
 
+  async function registerAsync(name, password) {
+    try {
+      const payload = await apiRequest("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ name: normalize(name), password: String(password || "").trim() })
+      });
+      register(name, password);
+      return { ok: true, message: payload.message || "注册成功，请联系管理员授权后登录", remote: true };
+    } catch (error) {
+      const fallback = register(name, password);
+      return fallback.ok ? fallback : { ok: false, message: error.message || fallback.message };
+    }
+  }
+
   function createUser(name, password) {
     return register(name, password);
+  }
+
+  async function createUserAsync(name, password) {
+    return registerAsync(name, password);
+  }
+
+  async function refreshCurrentUserFromServer(pageKey, shouldRedirect = false) {
+    const current = getCurrentUser();
+    if (!current) return null;
+    try {
+      const payload = await apiRequest("/api/auth/me");
+      const user = upsertLocalUser(payload.user);
+      setCurrentUser(user);
+      if (shouldRedirect && hasAnyPageAccess(user)) {
+        const targetPage = canAccessPage(user, pageKey)
+          ? PAGE_OPTIONS.find((page) => page.key === pageKey)
+          : PAGE_OPTIONS.find((page) => canAccessPage(user, page.key));
+        if (targetPage) window.location.href = pageHref(targetPage);
+      }
+      return user;
+    } catch (error) {
+      console.warn("刷新服务器授权失败:", error);
+      return current;
+    }
+  }
+
+  async function syncLocalUsersToServer() {
+    try {
+      const payload = await apiRequest("/api/auth/users/sync-local", {
+        method: "POST",
+        body: JSON.stringify({ users: getUsers() })
+      });
+      mergeVisibleUsers(payload.users || []);
+      return payload.users || [];
+    } catch (error) {
+      console.warn("同步本地授权到服务器失败:", error);
+      return null;
+    }
+  }
+
+  async function getUsersAsync() {
+    if (!localUsersSyncedToServer) {
+      localUsersSyncedToServer = true;
+      await syncLocalUsersToServer();
+    }
+    try {
+      const payload = await apiRequest("/api/auth/users");
+      mergeVisibleUsers(payload.users || []);
+      return payload.users || [];
+    } catch (error) {
+      console.warn("读取服务器用户失败，回退本地用户:", error);
+      return getUsers();
+    }
   }
 
   function updateUserAccess(userId, pageAccess) {
@@ -147,6 +282,20 @@
     target.pageAccess = normalizePageAccess(pageAccess);
     saveUsers(users);
     return true;
+  }
+
+  async function updateUserAccessAsync(userId, pageAccess) {
+    try {
+      const payload = await apiRequest(`/api/auth/users/${encodeURIComponent(userId)}/access`, {
+        method: "PATCH",
+        body: JSON.stringify({ pageAccess: normalizePageAccess(pageAccess) })
+      });
+      upsertLocalUser(payload.user);
+      return true;
+    } catch (error) {
+      console.warn("保存服务器授权失败，回退本地保存:", error);
+      return updateUserAccess(userId, pageAccess);
+    }
   }
 
   function resetPassword(userId, password) {
@@ -160,6 +309,19 @@
     return { ok: true };
   }
 
+  async function resetPasswordAsync(userId, password) {
+    try {
+      await apiRequest(`/api/auth/users/${encodeURIComponent(userId)}/reset-password`, {
+        method: "POST",
+        body: JSON.stringify({ password: String(password || "").trim() })
+      });
+      return resetPassword(userId, password);
+    } catch (error) {
+      const fallback = resetPassword(userId, password);
+      return fallback.ok ? fallback : { ok: false, message: error.message || fallback.message };
+    }
+  }
+
   function deleteUser(userId) {
     const users = getUsers();
     const target = users.find((user) => user.id === userId);
@@ -170,8 +332,19 @@
     return true;
   }
 
+  async function deleteUserAsync(userId) {
+    try {
+      await apiRequest(`/api/auth/users/${encodeURIComponent(userId)}`, { method: "DELETE" });
+      deleteUser(userId);
+      return true;
+    } catch (error) {
+      console.warn("删除服务器用户失败，回退本地删除:", error);
+      return deleteUser(userId);
+    }
+  }
+
   function pageHref(page) {
-    return `${page.href}?v=20260687`;
+    return `${page.href}?v=${AUTH_SCRIPT_VERSION}`;
   }
 
   function renderNavigation(activeKey) {
@@ -219,7 +392,7 @@
     `;
     panel.querySelector("[data-auth-logout]")?.addEventListener("click", () => {
       clearCurrentUser();
-      window.location.href = "index.html?v=20260687";
+      window.location.href = pageHref(PAGE_OPTIONS[0]);
     });
   }
 
@@ -230,14 +403,17 @@
       return null;
     }
     if (!hasAnyPageAccess(user)) {
-      renderWaitingScreen(user);
+      renderWaitingScreen(user, pageKey);
+      refreshCurrentUserFromServer(pageKey, true);
       return null;
     }
     if (!canAccessPage(user, pageKey)) {
       renderDeniedScreen(user, pageKey);
+      refreshCurrentUserFromServer(pageKey, true);
       return null;
     }
     renderSession(pageKey);
+    refreshCurrentUserFromServer(pageKey, false);
     return user;
   }
 
@@ -272,13 +448,17 @@
     document.querySelectorAll("[data-auth-mode]").forEach((button) => {
       button.addEventListener("click", () => renderAuthScreen({ pageKey, mode: button.dataset.authMode }));
     });
-    form.addEventListener("submit", (event) => {
+    form.addEventListener("submit", async (event) => {
       event.preventDefault();
+      const submitButton = form.querySelector("button[type='submit']");
       const formData = new FormData(form);
       const name = formData.get("authName");
       const password = formData.get("authPassword");
+      submitButton.disabled = true;
+      messageNode.textContent = mode === "login" ? "正在登录..." : "正在提交注册...";
       if (mode === "register") {
-        const result = register(name, password);
+        const result = await registerAsync(name, password);
+        submitButton.disabled = false;
         if (!result.ok) {
           messageNode.textContent = result.message;
           return;
@@ -286,13 +466,14 @@
         renderAuthScreen({ pageKey, mode: "login", message: result.message });
         return;
       }
-      const result = login(name, password);
+      const result = await loginAsync(name, password);
+      submitButton.disabled = false;
       if (!result.ok) {
         messageNode.textContent = result.message;
         return;
       }
       if (!hasAnyPageAccess(result.user)) {
-        renderWaitingScreen(result.user);
+        renderWaitingScreen(result.user, pageKey);
         return;
       }
       const targetPage = canAccessPage(result.user, pageKey)
@@ -302,20 +483,30 @@
     });
   }
 
-  function renderWaitingScreen(user) {
+  function renderWaitingScreen(user, pageKey = "query") {
     document.body.className = "auth-page";
     document.body.innerHTML = `
       <main class="auth-shell">
         <section class="auth-panel waiting-panel">
           <h1>等待授权</h1>
           <p>账号 ${escapeHtml(user.name)} 已注册，请联系管理员孙立柱在“权限管理”页面授权后再进入系统。</p>
-          <button class="button primary" type="button" data-auth-logout>退出登录</button>
+          <div class="auth-actions">
+            <button class="button primary" type="button" data-auth-refresh>刷新授权</button>
+            <button class="button" type="button" data-auth-logout>退出登录</button>
+          </div>
+          <p class="auth-message" data-auth-message></p>
         </section>
       </main>
     `;
+    const messageNode = document.querySelector("[data-auth-message]");
+    document.querySelector("[data-auth-refresh]")?.addEventListener("click", async () => {
+      messageNode.textContent = "正在检查服务器授权...";
+      const refreshed = await refreshCurrentUserFromServer(pageKey, true);
+      if (!hasAnyPageAccess(refreshed)) messageNode.textContent = "暂未查询到授权，请确认管理员已保存授权。";
+    });
     document.querySelector("[data-auth-logout]")?.addEventListener("click", () => {
       clearCurrentUser();
-      renderAuthScreen({ pageKey: "query" });
+      renderAuthScreen({ pageKey });
     });
   }
 
@@ -356,16 +547,25 @@
     ROLE_USER,
     DEFAULT_ADMIN,
     getUsers,
+    getUsersAsync,
     getCurrentUser,
     canAccessPage,
     requirePage,
     renderSession,
     login,
+    loginAsync,
     register,
+    registerAsync,
     createUser,
+    createUserAsync,
     updateUserAccess,
+    updateUserAccessAsync,
     resetPassword,
+    resetPasswordAsync,
     deleteUser,
+    deleteUserAsync,
+    syncLocalUsersToServer,
+    refreshCurrentUserFromServer,
     logout: clearCurrentUser,
     normalizePageAccess
   };
