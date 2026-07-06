@@ -1290,7 +1290,7 @@ async function importBatchFile(file) {
       const chunk = rows.slice(i, i + batchSize);
       const chunkResults = chunk.map((row, chunkIndex) => {
         const result = calculateBestOption({
-          origin: pick(row, ["发货地", "供应商简称", "发货仓", "仓库"]) || els.originSelect.value,
+          origin: pickBatchOrigin(row),
           elevatorService: pick(row, ["是否上楼", "上楼服务", "上楼", "需上楼"]) || els.elevatorSelect.value,
           floorType: pick(row, ["楼梯类型", "上楼类型", "楼梯"]) || els.floorTypeSelect.value,
           address: pick(row, ["顾客地址", "客户地址", "收货地址", "地址"]) || "",
@@ -1459,6 +1459,29 @@ function buildImportSourceRow(row, headers) {
     output[header] = row?.[header] ?? "";
     return output;
   }, {});
+}
+
+function pickBatchOrigin(row) {
+  const explicitOrigin = pickExact(row, ["发货地", "供应商简称", "发货供应商简称", "供应商"]);
+  if (explicitOrigin) return explicitOrigin;
+
+  const entries = Object.entries(row || {});
+  const fuzzy = entries.find(([key, value]) => {
+    const header = normalizeHeader(key);
+    if (clean(value) === "") return false;
+    if (header.includes("仓库") || header.includes("地址")) return false;
+    return header.includes("发货地") || header.includes("供应商简称");
+  });
+  return fuzzy ? fuzzy[1] : els.originSelect.value;
+}
+
+function pickExact(row, names) {
+  const entries = Object.entries(row || {});
+  for (const name of names) {
+    const exact = entries.find(([key]) => normalizeHeader(key) === normalizeHeader(name));
+    if (exact && clean(exact[1]) !== "") return exact[1];
+  }
+  return "";
 }
 
 function matchesQuoteOrigin(quote, originName) {
