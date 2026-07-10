@@ -2400,27 +2400,27 @@ function downloadBatchTemplate() {
     return;
   }
   const templateRows = [
-    ["订单号", "原始单号", "店铺", "仓库", "客服备注", "顾客地址", "货品简称", "是否上楼", "楼梯类型", "购买件数", "发货地"],
-    ["", "", "", "", "", "", "示例货品A", "无需上楼", "", 1, ""],
-    ["", "", "", "", "", "", "示例货品B", "需上楼", "电梯", 2, ""]
+    ["订单号", "原始单号", "店铺", "仓库", "客服备注", "货品简称", "是否上楼", "楼梯类型", "购买件数", "发货地"],
+    ["示例订单1", "示例原始单号1", "示例店铺", "示例仓库", "浙江省宁波市慈溪市示例详细地址", "示例货品A", "无需上楼", "电梯", 1, originNames[0] || ""],
+    ["示例订单2", "示例原始单号2", "示例店铺", "示例仓库", "四川省泸州市纳溪区示例详细地址", "示例货品B", "需上楼", "电梯", 2, originNames[0] || ""]
   ];
   const originRows = originNames.map((name) => [name]);
   const wb = XLSX.utils.book_new();
   const ws1 = XLSX.utils.aoa_to_sheet(templateRows);
   ws1["!cols"] = [
-    { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 14 },
-    { wch: 30 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 22 }
+    { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 18 }, { wch: 44 },
+    { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 22 }
   ];
   ws1["!dataValidation"] = [
-    { sqref: "H2:H501", type: "list", formula1: '"需上楼,无需上楼"', allowBlank: 1 },
-    { sqref: "I2:I501", type: "list", formula1: '"电梯,步行梯"', allowBlank: 1 }
+    { sqref: "G2:G501", type: "list", formula1: '"需上楼,无需上楼"', allowBlank: 0 },
+    { sqref: "H2:H501", type: "list", formula1: '"电梯,步行梯"', allowBlank: 0 }
   ];
   if (originNames.length) {
     ws1["!dataValidation"].push({
-      sqref: "K2:K501",
+      sqref: "J2:J501",
       type: "list",
       formula1: `发货地选项!$A$1:$A$${originNames.length}`,
-      allowBlank: 1
+      allowBlank: 0
     });
   }
   XLSX.utils.book_append_sheet(wb, ws1, "地址查询导入模板");
