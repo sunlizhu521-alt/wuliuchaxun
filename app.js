@@ -528,7 +528,7 @@ function normalizeProducts(packageRows, infoItems = []) {
     if (!model && !materialCode && !shortName && !salesProductLine && !salesSeries) return null;
     const packages = parsePackages(row);
     const singleWeight = roundWeight(packages.reduce((sum, item) => sum + (item.weight || item.chargeWeight || 0), 0));
-    const singleChargeWeight = roundWeight(packages.reduce((sum, item) => sum + item.chargeWeight, 0));
+    const singleChargeWeight = roundChargeWeight(packages.reduce((sum, item) => sum + item.chargeWeight, 0));
     const packageCountFromRow = parseNumber(pick(row, ["件数", "包裹件数", "包裹数量", "单件包裹数", "包装件数"]));
     const totalActualWeightFromRow = parseNumber(pick(row, ["总实际重量", "总实际重量kg", "实际总重量", "实际总重量kg", "总重量", "总重量kg"]));
     const totalVolume = parseNumber(pick(row, ["总体积", "总体积cm3", "总体积cm³", "总体积立方厘米", "总立方厘米", "总方量", "体积"]));
@@ -616,15 +616,15 @@ function parsePackages(row) {
       width,
       height,
       weight,
-      volumeWeight: roundWeight(volumeWeight),
-      chargeWeight: roundWeight(chargeWeight || 0)
+      volumeWeight: roundChargeWeight(volumeWeight),
+      chargeWeight: roundChargeWeight(chargeWeight || 0)
     });
   }
 
   if (!packages.length) {
     const weight = parseNumber(pick(row, ["计费重量kg", "计费重量", "重量kg", "重量", "实际重量kg"]));
     if (weight) {
-      packages.push({ index: 1, volume: 0, length: 0, width: 0, height: 0, weight, volumeWeight: 0, chargeWeight: weight });
+      packages.push({ index: 1, volume: 0, length: 0, width: 0, height: 0, weight, volumeWeight: 0, chargeWeight: roundChargeWeight(weight) });
     }
   }
   return packages;
@@ -1376,7 +1376,7 @@ function calculateBestOption(input) {
       const addressMatch = matchAddress(quote, address);
       if (!addressMatch.matched) return null;
       const volumeWeight = calculateLogisticsChargeWeight(product, purchaseQty, quote);
-      const totalChargeWeight = roundWeight(Math.max(totalActualWeight || 0, volumeWeight || 0));
+      const totalChargeWeight = roundChargeWeight(Math.max(totalActualWeight || 0, volumeWeight || 0));
       if (!Number.isFinite(totalChargeWeight) || totalChargeWeight <= 0) return null;
       const costDetail = calculateCostDetail(quote, totalChargeWeight);
       const floorFeeDetail = calculateFloorFeeDetail({
@@ -1629,9 +1629,9 @@ function matchAddress(quote, address) {
 
 function calculateLogisticsChargeWeight(product, purchaseQty, quote) {
   if (product?.totalVolume && quote?.bubbleRatio) {
-    return roundWeight(product.totalVolume * purchaseQty / quote.bubbleRatio);
+    return roundChargeWeight(product.totalVolume * purchaseQty / quote.bubbleRatio);
   }
-  return roundWeight((product?.singleChargeWeight || 0) * purchaseQty);
+  return roundChargeWeight((product?.singleChargeWeight || 0) * purchaseQty);
 }
 
 function calculateTotalActualWeight(product, purchaseQty) {
@@ -2038,7 +2038,7 @@ function calculatePackageFloorWeights(product, quote) {
       index: pkg.index,
       volume: pkg.volume || 0,
       bubbleRatio,
-      weight: pkg.volume ? roundWeight(pkg.volume / bubbleRatio) : 0
+      weight: pkg.volume ? roundChargeWeight(pkg.volume / bubbleRatio) : 0
     }))
     .filter((item) => item.weight > 0);
 }
@@ -2545,6 +2545,12 @@ function roundMoney(value) {
 
 function roundWeight(value) {
   return Math.round(Number(value || 0) * 100) / 100;
+}
+
+function roundChargeWeight(value) {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.round((Math.ceil((num - 1e-9) * 2) / 2) * 10) / 10;
 }
 
 function formatDateForFileName(date) {
