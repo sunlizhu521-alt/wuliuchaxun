@@ -1462,7 +1462,7 @@ function buildImportSourceRow(row, headers) {
 }
 
 function pickBatchOrigin(row) {
-  const explicitOrigin = pickExact(row, ["发货地", "供应商简称", "发货供应商简称", "供应商"]);
+  const explicitOrigin = normalizeBatchOriginValue(pickExact(row, ["发货地", "供应商简称", "发货供应商简称", "供应商"]));
   if (explicitOrigin) return explicitOrigin;
 
   const entries = Object.entries(row || {});
@@ -1472,7 +1472,40 @@ function pickBatchOrigin(row) {
     if (header.includes("仓库") || header.includes("地址")) return false;
     return header.includes("发货地") || header.includes("供应商简称");
   });
-  return fuzzy ? fuzzy[1] : els.originSelect.value;
+  const fuzzyOrigin = fuzzy ? normalizeBatchOriginValue(fuzzy[1]) : "";
+  if (fuzzyOrigin) return fuzzyOrigin;
+
+  const warehouseOrigin = matchOriginFromText(pickExact(row, ["仓库", "发货仓", "仓库名称", "发货仓库"]));
+  return warehouseOrigin || els.originSelect.value;
+}
+
+function normalizeBatchOriginValue(value) {
+  const text = clean(value);
+  if (!text) return "";
+  return matchOriginFromText(text) || text;
+}
+
+function matchOriginFromText(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) return "";
+  const origins = [...state.origins]
+    .map((origin) => ({
+      name: origin.name,
+      aliases: [origin.name, origin.supplierShortName].filter(Boolean)
+    }))
+    .filter((origin) => origin.name)
+    .sort((a, b) => b.name.length - a.name.length);
+
+  for (const origin of origins) {
+    for (const alias of origin.aliases) {
+      const key = normalizeText(alias);
+      if (!key || key.length < 2) continue;
+      if (normalized === key || normalized.includes(key) || normalized.includes(`${key}仓`)) {
+        return origin.name;
+      }
+    }
+  }
+  return "";
 }
 
 function pickExact(row, names) {
