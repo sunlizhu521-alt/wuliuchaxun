@@ -1275,10 +1275,10 @@ async function importBatchFile(file) {
     const headers = getWorksheetHeaders(worksheet);
     state.batchImportHeaders = headers;
 
-    const hasAddress = headers.some((h) => h && (h.includes("地址") || h.includes("顾客")));
+    const hasCustomerRemark = headers.some((h) => h && normalizeHeader(h) === normalizeHeader("客服备注"));
     const hasShortName = headers.some((h) => h && (h.includes("货品简称") || h.includes("简称")));
-    if (!hasAddress || !hasShortName) {
-      toast(`导入文件缺少必填列：${[!hasAddress && "顾客地址", !hasShortName && "货品简称"].filter(Boolean).join("、")}`);
+    if (!hasCustomerRemark || !hasShortName) {
+      toast(`导入文件缺少必填列：${[!hasCustomerRemark && "客服备注", !hasShortName && "货品简称"].filter(Boolean).join("、")}`);
       return;
     }
 
@@ -1293,7 +1293,7 @@ async function importBatchFile(file) {
           origin: pickBatchOrigin(row),
           elevatorService: pick(row, ["是否上楼", "上楼服务", "上楼", "需上楼"]) || els.elevatorSelect.value,
           floorType: pick(row, ["楼梯类型", "上楼类型", "楼梯"]) || els.floorTypeSelect.value,
-          address: pick(row, ["顾客地址", "客户地址", "收货地址", "地址"]) || "",
+          address: pickBatchAddressFromRemark(row),
           shortName: pick(row, ["货品简称", "货品名称简称", "货品简名", "简称"]) || "",
           purchaseQty: parsePurchaseQty(pick(row, ["购买件数", "商品购买件数", "件数", "数量"]))
         });
@@ -1459,6 +1459,23 @@ function buildImportSourceRow(row, headers) {
     output[header] = row?.[header] ?? "";
     return output;
   }, {});
+}
+
+function pickBatchAddressFromRemark(row) {
+  const remark = pickExact(row, ["客服备注"]);
+  if (!remark) return "";
+  const parsed = parsePastedAddress(remark);
+  if (parsed.error) return "";
+  return formatParsedCustomerAddress(parsed);
+}
+
+function formatParsedCustomerAddress(parsed) {
+  const parts = [];
+  if (parsed.province?.name) parts.push(parsed.province.name);
+  if (parsed.city?.name && !sameText(parsed.city.name, parsed.province?.name)) parts.push(parsed.city.name);
+  if (parsed.district?.name) parts.push(parsed.district.name);
+  if (parsed.detail) parts.push(parsed.detail);
+  return parts.join("");
 }
 
 function pickBatchOrigin(row) {
